@@ -4,7 +4,7 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
     return window.location.origin.includes('vercel.app') 
       ? '/api' 
-      : 'http://localhost:3000';
+      : `${window.location.protocol}//${window.location.hostname}:3000`;
   }
   return '/api';
 };

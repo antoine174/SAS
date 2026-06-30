@@ -13,7 +13,7 @@ import { PDFDocument } from 'pdf-lib';
 import { supabase, BUCKET } from './supabase';
 import { RECEIPTS, DOCUMENTS } from './fileDefinitions';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE as API_URL } from './api';
 
 // ─── Tab config map ───────────────────────────────────────────────────────────
 const TAB_CONFIG = {

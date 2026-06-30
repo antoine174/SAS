@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { Search, PlusCircle, Lock, Unlock, Container } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE as API_URL } from '../lib/api';
 
 export default function ConsignmentHeader({ consignment, locked, onLock, onUnlock }) {
   const [containerName, setContainerName] = useState('');

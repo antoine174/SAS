@@ -31,7 +31,7 @@ import { RECEIPTS, DOCUMENTS } from './lib/fileDefinitions';
 import { supabase, BUCKET }    from './lib/supabase';
 import { mergeAndDownload }    from './lib/mergeEngine';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE as API_URL } from './lib/api';
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 const TABS = [
