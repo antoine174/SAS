@@ -1,12 +1,12 @@
 require('dotenv').config();
-const express    = require('express');
-const mongoose   = require('mongoose');
-const cors       = require('cors');
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
 const Consignment = require('./models/Consignment');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
-
+module.exports = app; // <--- Crucial for Vercel
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
@@ -114,31 +114,31 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
       return res.status(401).json({ message: 'رمز التأكيد غير صحيح' });
 
     const resetReceipts = {
-      'receipts.currentAccount':   null,
-      'receipts.cps':              null,
-      'receipts.freightInvoice':   null,
-      'receipts.freightReceipt':   null,
+      'receipts.currentAccount': null,
+      'receipts.cps': null,
+      'receipts.freightInvoice': null,
+      'receipts.freightReceipt': null,
       'receipts.unloadingReceipt': null,
       'receipts.unloadingInvoice': null,
-      'receipts.guardReceipt':     null,
-      'receipts.guardInvoice':     null,
-      'receipts.fineReceipt':      null,
-      'receipts.fineInvoice':      null,
-      'receipts.weightReceipt':    null,
-      'receipts.analysisReceipt':  null,
+      'receipts.guardReceipt': null,
+      'receipts.guardInvoice': null,
+      'receipts.fineReceipt': null,
+      'receipts.fineInvoice': null,
+      'receipts.weightReceipt': null,
+      'receipts.analysisReceipt': null,
     };
 
     const resetDocuments = {
-      'documents.firstRelease':       null,
-      'documents.appendix4':          null,
-      'documents.invoice':            null,
-      'documents.declaration':        null,
-      'documents.insurance':          null,
-      'documents.houseBillOfLading':  null,
+      'documents.firstRelease': null,
+      'documents.appendix4': null,
+      'documents.invoice': null,
+      'documents.declaration': null,
+      'documents.insurance': null,
+      'documents.houseBillOfLading': null,
       'documents.masterBillOfLading': null,
-      'documents.permission':         null,
-      'documents.euro1':              null,
-      'documents.analysis':           null,
+      'documents.permission': null,
+      'documents.euro1': null,
+      'documents.analysis': null,
     };
 
     // Null only the requested tab's fields
@@ -153,7 +153,7 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
 
     // ── Hard-delete check ────────────────────────────────────────────────────
     // Convert Mongoose subdocuments to plain objects, then test every value.
-    const receiptsEmpty  = Object.values(doc.receipts.toObject()).every((v) => !v);
+    const receiptsEmpty = Object.values(doc.receipts.toObject()).every((v) => !v);
     const documentsEmpty = Object.values(doc.documents.toObject()).every((v) => !v);
 
     if (receiptsEmpty && documentsEmpty) {
