@@ -1,0 +1,31 @@
+/* src/index.css */
+/* Tailwind base layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Global base styles ─────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100;
+    font-family: 'Tajawal', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ─── Toast overrides ─────────────────────────────────────────────────────── */
+.Toastify__toast {
+  font-family: 'Tajawal', sans-serif !important;
+  font-size: 0.875rem;
+  border-radius: 0.75rem !important;
+}

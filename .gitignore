@@ -1,0 +1,124 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SAS Custom Clearance — Root .gitignore
+# Covers: root / backend (Node/Express) / frontend (Vite + React)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── 1. Environment Secrets ────────────────────────────────────────────────────
+# Never commit credentials, API keys, or connection strings.
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+
+# Catch any future variant (e.g. .env.preview, .env.custom)
+.env.*
+
+
+# ── 2. Dependencies ───────────────────────────────────────────────────────────
+# Root, backend, and frontend node_modules are all excluded.
+node_modules/
+*/node_modules/
+**/node_modules/
+
+
+# ── 3. Build Output ───────────────────────────────────────────────────────────
+# Vite / React production build
+dist/
+*/dist/
+
+# Generic build/output directories
+build/
+out/
+.output/
+.vercel/
+.netlify/
+
+
+# ── 4. Logs & Debug ───────────────────────────────────────────────────────────
+# npm / yarn / pnpm logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime logs
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Linter / formatter caches
+.eslintcache
+.prettiercache
+.stylelintcache
+
+
+# ── 5. System Files ───────────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+
+# ── 6. IDE & Editor Settings ─────────────────────────────────────────────────
+# VS Code (keep .editorconfig and workspace-level extensions.json if desired)
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains IDEs (WebStorm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Neovim swap files
+*.swp
+*.swo
+.netrwhist
+
+# Emacs
+*#
+.#*
+
+
+# ── 7. Testing & Coverage ─────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+
+# ── 8. Miscellaneous ─────────────────────────────────────────────────────────
+# TypeScript incremental compilation info
+*.tsbuildinfo
+
+# Optional npm cache
+.npm
+
+# Yarn integrity file
+.yarn-integrity
+
+# Diagnostic reports (Node.js)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Vite local config overrides
+vite.config.local.*
