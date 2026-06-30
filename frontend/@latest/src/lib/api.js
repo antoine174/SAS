@@ -1,26 +1,26 @@
 // src/lib/api.js
-/**
- * Dual-environment API base URL.
- *
- * In production (Vercel) Vite sets MODE = 'production', so all requests go
- * through Vercel's rewrite rules (/api → /api/index.js) with no CORS issues.
- *
- * In development (local) requests hit the Express server directly on port 3000.
- */
-const API_BASE = import.meta.env.MODE === 'production'
-  ? '/api'
-  : (import.meta.env.VITE_API_URL || 'http://localhost:3000');
-
-/**
- * Thin fetch wrapper that prepends API_BASE and always returns parsed JSON.
- *
- * @param {string} endpoint  – path starting with '/', e.g. '/api/consignments'
- * @param {RequestInit} [options] – standard fetch options (method, headers, body…)
- * @returns {Promise<any>}   – parsed JSON response body
- */
-export const fetchApi = async (endpoint, options = {}) => {
-  const response = await fetch(`${API_BASE}${endpoint}`, options);
-  return response.json();
+// Detect if we are on Vercel (production) or local
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin.includes('vercel.app') 
+      ? '/api' 
+      : 'http://localhost:3000';
+  }
+  return '/api';
 };
 
-export { API_BASE };
+export const API_BASE = getBaseUrl();
+
+export const fetchApi = async (endpoint, options = {}) => {
+  const url = `${API_BASE}${endpoint}`;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers }
+    });
+    return await response.json();
+  } catch (error) {
+    console.error(`API Error at ${url}:`, error);
+    throw error;
+  }
+};

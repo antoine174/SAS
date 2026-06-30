@@ -7,7 +7,11 @@ const Consignment = require('./models/Consignment');
 const app = express();
 const PORT = process.env.PORT || 3000;
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins to handle varying mobile/desktop request headers
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // ─── MongoDB Connection ───────────────────────────────────────────────────────
