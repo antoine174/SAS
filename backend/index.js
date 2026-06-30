@@ -6,7 +6,6 @@ const Consignment = require('./models/Consignment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-module.exports = app; // <--- Crucial for Vercel
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
@@ -215,5 +214,12 @@ app.delete('/api/consignments/:id', async (req, res) => {
   }
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => console.log(`🚀  Server running on http://localhost:${PORT}`));
+// ─── Start (local dev only) ──────────────────────────────────────────────────
+// When imported by Vercel as a serverless function, require.main !== module,
+// so app.listen is skipped and the crash is avoided.
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`🚀  Server running on http://localhost:${PORT}`));
+}
+
+// Export for Vercel serverless runtime
+module.exports = app;
