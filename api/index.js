@@ -5,7 +5,6 @@ const cors = require('cors');
 const Consignment = require('./models/Consignment');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
   origin: '*', // Allow all origins to handle varying mobile/desktop request headers
@@ -218,12 +217,9 @@ app.delete('/api/consignments/:id', async (req, res) => {
   }
 });
 
-// ─── Start (local dev only) ──────────────────────────────────────────────────
-// When imported by Vercel as a serverless function, require.main !== module,
-// so app.listen is skipped and the crash is avoided.
+// At the bottom of /api/index.js
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`🚀  Server running on http://localhost:${PORT}`));
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
-
-// Export for Vercel serverless runtime
 module.exports = app;

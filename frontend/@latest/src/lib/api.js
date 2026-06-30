@@ -1,12 +1,8 @@
-// src/lib/api.js
-// Detect if we are on Vercel (production) or local
-const getBaseUrl = () => {
-  if (typeof window !== 'undefined') {
-    return window.location.origin.includes('vercel.app') 
-      ? '/api' 
-      : `${window.location.protocol}//${window.location.hostname}:3000`;
+export const getBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return '/api';
   }
-  return '/api';
+  return 'http://localhost:3000';
 };
 
 export const API_BASE = getBaseUrl();
