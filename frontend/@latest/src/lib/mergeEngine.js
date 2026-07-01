@@ -94,9 +94,10 @@ export async function mergeAndDownload(
   onError,
   password,
 ) {
-  const { _id: id, billId } = consignment;
+  const { _id: id, acid } = consignment;
   const tabData = consignment[activeTab] ?? {};
-  const { defs, label } = TAB_CONFIG[activeTab];
+  const currentTabConfig = TAB_CONFIG[activeTab] || {};
+  const { defs = [], label = 'ملف' } = currentTabConfig;
 
   // ── Step 1: Validate mandatory files for this tab ──────────────────────────
   const missingMandatory = defs
@@ -104,7 +105,7 @@ export async function mergeAndDownload(
     .map((def) => def.label);
 
   if (missingMandatory.length > 0) {
-    onError(`المستندات الإلزامية التالية مفقودة:\n${missingMandatory.join(' | ')}`);
+    onError?.(`المستندات الإلزامية التالية مفقودة:\n${missingMandatory.join(' | ')}`);
     return false;
   }
 
@@ -116,17 +117,17 @@ export async function mergeAndDownload(
       url: tabData[def.key],
       label: def.label,
       key: def.key,
-      storagePath: `${billId}/${def.key}.pdf`,
+      storagePath: `${id}/${def.key}.pdf`,
     }));
 
   if (mergeList.length === 0) {
-    onError('لا توجد ملفات لدمجها.');
+    onError?.('لا توجد ملفات لدمجها.');
     return false;
   }
 
   // ── Step 3: Fetch & merge ──────────────────────────────────────────────────
   // ── Step 3: Fetch & merge PDFs ─────────────────────────────────────────────
-  onProgress(`جارٍ تحميل ${mergeList.length} ملف…`);
+  onProgress?.(`جارٍ تحميل ${mergeList.length} ملف…`);
 
   const masterPdf = await PDFDocument.create();
 
@@ -142,14 +143,14 @@ export async function mergeAndDownload(
       console.error(`⚠️ Could not load PDF for "${item.label}":`, err);
     }
   }
-  onProgress('جارٍ إنشاء الملف المدموج…');
+  onProgress?.('جارٍ إنشاء الملف المدموج…');
   const masterBytes = await masterPdf.save();
 
   // ── Step 4: Download ───────────────────────────────────────────────────────
   const date = new Date().toISOString().slice(0, 10);
-  const filename = `${label}_شحنة_${billId}_${date}.pdf`;
+  const filename = `${label}_شحنة_${acid || id}_${date}.pdf`;
   downloadBlob(masterBytes, filename);
-  onProgress('تم تحميل الملف بنجاح ✅');
+  onProgress?.('تم تحميل الملف بنجاح ✅');
 
   // ── Steps 5 & 6: Cleanup (only when withCleanup = true) ───────────────────
   if (!withCleanup) return true;
