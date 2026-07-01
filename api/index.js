@@ -3,13 +3,14 @@ require('dotenv').config();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+let supabase = null;
 if (!supabaseUrl || !supabaseKey) {
   console.error("FATAL ERROR: Supabase credentials are not set in environment variables.");
-  process.exit(1); 
+  // Removed process.exit(1) because it crashes Vercel Serverless Functions immediately
+} else {
+  const { createClient } = require('@supabase/supabase-js');
+  supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
-
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -40,7 +41,10 @@ mongoose
       .dropIndex('billId_1_companyName_1')
       .catch(() => {});
   })
-  .catch((err) => { console.error('❌  MongoDB error:', err); process.exit(1); });
+  .catch((err) => { 
+    console.error('❌  MongoDB error:', err); 
+    // Removed process.exit(1) to allow Vercel to boot and serve 500 error responses gracefully
+  });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -289,6 +293,8 @@ app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res)
     let publicUrl = null;
     
     // 1. Upload to Supabase using global SDK instance
+    if (!supabase) throw new Error("Supabase credentials missing on server");
+    
     const fileBuffer = fs.readFileSync(req.file.path);
     const storagePath = `${id}/${key}.pdf`;
     
@@ -350,6 +356,8 @@ app.delete('/api/consignments/:id', async (req, res) => {
 
     // ── Supabase storage cleanup ────
     try {
+      if (!supabase) throw new Error("Supabase credentials missing on server");
+      
       const folder = doc._id.toString(); // Uses _id for Supabase folder
       const { data: fileList, error: listErr } = await supabase.storage
         .from('consignments')
