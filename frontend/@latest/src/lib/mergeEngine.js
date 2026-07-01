@@ -13,7 +13,7 @@ import { PDFDocument } from 'pdf-lib';
 import { supabase, BUCKET } from './supabase';
 import { RECEIPTS, DOCUMENTS } from './fileDefinitions';
 
-import { API_BASE as API_URL } from './api';
+import { API_BASE_URL as API_URL } from './api';
 
 // ─── Tab config map ───────────────────────────────────────────────────────────
 const TAB_CONFIG = {

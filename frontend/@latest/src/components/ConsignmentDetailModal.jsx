@@ -17,9 +17,14 @@ import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload } from '../lib/mergeEngine';
 import { fetchApi } from '../lib/api';
 
+const TAB_CONFIG = {
+  receipts: { defs: RECEIPTS, label: 'ايصالات', icon: Receipt },
+  documents: { defs: DOCUMENTS, label: 'مستندات', icon: FolderOpen },
+};
+
 const TABS = [
-  { id: 'receipts', label: 'ايصالات', icon: Receipt },
-  { id: 'documents', label: 'مستندات', icon: FolderOpen },
+  { id: 'receipts', ...TAB_CONFIG.receipts },
+  { id: 'documents', ...TAB_CONFIG.documents },
 ];
 
 const COMPANIES = ['مصانع الترياق', 'شركة الزامل'];
@@ -29,7 +34,7 @@ const COMPANY_COLOR = {
 };
 
 export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDeleteModal, onUpdate }) {
-  const [activeTab, setActiveTab] = useState('receipts');
+  const [activeTab, setActiveTab] = useState('documents');
   const [form, setForm] = useState({
     companyName: detailDoc.companyName || COMPANIES[0],
     acid: detailDoc.acid || '',
@@ -173,7 +178,8 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   };
 
-  const currentFields = activeTab === 'receipts' ? RECEIPTS : DOCUMENTS;
+  const currentTabConfig = TAB_CONFIG[activeTab] || { defs: [] };
+  const currentFields = currentTabConfig.defs;
   const tabData = localDoc[activeTab] || {};
   const accent = COMPANY_COLOR[localDoc.companyName] || 'slate';
 
