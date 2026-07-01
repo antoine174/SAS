@@ -1,11 +1,6 @@
 // api.js
-// This automatically picks the right URL based on where it's running
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
+// Uses relative paths for seamless proxying locally and Serverless routes on Vercel
 export const fetchApi = async (url, options = {}) => {
-  // Always use the dynamic base URL
-  const fullUrl = `${API_BASE_URL}${url}`;
-
   const onError = (typeof options.onError === 'function') ? options.onError : () => { };
 
   // Conditionally add headers: let the browser handle boundaries if it's FormData
@@ -15,7 +10,7 @@ export const fetchApi = async (url, options = {}) => {
   }
 
   try {
-    const response = await fetch(fullUrl, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
   } catch (error) {

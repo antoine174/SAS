@@ -13,7 +13,7 @@ import { PDFDocument } from 'pdf-lib';
 import { supabase, BUCKET } from './supabase';
 import { RECEIPTS, DOCUMENTS } from './fileDefinitions';
 
-import { API_BASE_URL as API_URL } from './api';
+import { fetchApi } from './api';
 
 // ─── Tab config map ───────────────────────────────────────────────────────────
 const TAB_CONFIG = {
@@ -173,23 +173,17 @@ export async function mergeAndDownload(
   // 6. Null this tab's URL fields in MongoDB (backend may hard-delete if both tabs are empty)
   let fullyDeleted = false;
   try {
-    const cleanupRes = await fetch(`${API_URL}/api/consignments/${id}/cleanup`, {
+    const data = await fetchApi(`/api/consignments/${id}/cleanup`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tab: activeTab, password }),
     });
-    if (cleanupRes.status === 401) {
-      const data = await cleanupRes.json();
-      const err = new Error(data.message || 'رمز التأكيد غير صحيح');
-      err.isUnauthorized = true;
-      throw err;
-    }
-    if (cleanupRes.ok) {
-      const data = await cleanupRes.json();
-      fullyDeleted = data.deleted === true;
-    }
+    fullyDeleted = data.deleted === true;
   } catch (err) {
-    if (err.isUnauthorized) throw err;
+    if (err.message.includes('رمز التأكيد')) {
+      const customErr = new Error(err.message);
+      customErr.isUnauthorized = true;
+      throw customErr;
+    }
     console.error('Backend cleanup error:', err);
   }
 
