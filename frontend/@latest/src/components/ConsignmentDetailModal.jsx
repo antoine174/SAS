@@ -88,18 +88,15 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     setUploadingKeys((prev) => new Set(prev).add(uploadKey));
 
     try {
-      const storagePath = `${localDoc._id}/${key}.pdf`; // Supabase folder keyed by unique _id
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, file, { contentType: 'application/pdf', upsert: true });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('tab', tab);
+      formData.append('key', key);
 
-      if (uploadError) throw uploadError;
-
-      const publicUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storagePath}`;
-
-      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
-        method: 'PATCH',
-        body: JSON.stringify({ tab, key, url: publicUrl }),
+      // DO NOT add headers! The browser needs to add the 'multipart/form-data' boundary automatically.
+      const data = await fetchApi(`/api/consignments/${localDoc._id}/upload`, {
+        method: 'POST',
+        body: formData, 
       });
 
       setLocalDoc(data);

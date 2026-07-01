@@ -1,26 +1,26 @@
+// api.js
+// This automatically picks the right URL based on where it's running
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export const fetchApi = async (url, options = {}) => {
+  // Always use the dynamic base URL
   const fullUrl = `${API_BASE_URL}${url}`;
-  
-  // Defensive: Always provide a fallback function if onError is missing
-  const onError = (typeof options.onError === 'function') ? options.onError : () => {};
+
+  const onError = (typeof options.onError === 'function') ? options.onError : () => { };
+
+  // Conditionally add headers: let the browser handle boundaries if it's FormData
+  const headers = { ...options.headers };
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   try {
-    const response = await fetch(fullUrl, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers }
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-    }
-    
+    const response = await fetch(fullUrl, { ...options, headers });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
   } catch (error) {
-    console.error(`API Error at ${fullUrl}:`, error);
-    onError?.(error); // Guaranteed to be safe now
+    console.error("API Error:", error);
+    onError?.(error);
     throw error;
   }
 };
