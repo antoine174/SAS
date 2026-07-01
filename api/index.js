@@ -45,6 +45,14 @@ mongoose
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 /**
+ * GET /api/health
+ * Health check endpoint for Vercel verification
+ */
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Backend is alive' });
+});
+
+/**
  * GET /api/consignments
  *
  * Multi-field, case-insensitive, partial-match search.
@@ -75,7 +83,8 @@ app.get('/api/consignments', async (req, res) => {
     const docs = await Consignment.find(query).sort({ createdAt: -1 }).limit(100);
     res.json(docs);
   } catch (err) {
-    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+    console.error("GET /api/consignments Error Stack:", err.stack);
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message, stack: err.stack });
   }
 });
 
