@@ -92,13 +92,10 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
       const publicUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storagePath}`;
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/consignments/${localDoc._id}/file`, {
+      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tab, key, url: publicUrl }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
 
       setLocalDoc(data);
       toast.success(`تم رفع "${file.name}" بنجاح ✅`);
@@ -123,13 +120,10 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
       const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
       if (error) throw error;
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/consignments/${localDoc._id}/file`, {
+      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tab, key, url: null }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
 
       setLocalDoc(data);
       toast.info('تم حذف الملف');
