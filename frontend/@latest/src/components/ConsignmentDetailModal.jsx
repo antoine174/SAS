@@ -31,12 +31,15 @@ import {
   Loader2,
   PlusCircle,
   Hash,
+  ListChecks,
+  SlidersHorizontal,
+  XCircle,
 } from 'lucide-react';
 import UploadCard from './UploadCard';
 import ProgressBar from './ProgressBar';
 import { RECEIPTS, DOCUMENTS } from '../lib/fileDefinitions';
 import { supabase, BUCKET } from '../lib/supabase';
-import { mergeAndDownload } from '../lib/mergeEngine';
+import { mergeAndDownload, customMergeAndDownload } from '../lib/mergeEngine';
 import { fetchApi } from '../lib/api';
 
 // ─── Tab configuration ────────────────────────────────────────────────────────
@@ -166,6 +169,14 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   // Dropdown + quantity for the "Add More" toolbar (one set per tab)
   const [addDropdown, setAddDropdown] = useState({ documents: '', receipts: '' });
   const [addQty,      setAddQty]      = useState({ documents: 1,  receipts: 1  });
+
+  // ── Custom Merge Mode ─────────────────────────────────────────────────────────
+  // Completely isolated from the standard merge logic.
+  // selectedFilesForMerge: [{ key, storagePath, label }, …] — order = click order
+  const [isCustomMergeMode,      setIsCustomMergeMode]      = useState(false);
+  const [selectedFilesForMerge,  setSelectedFilesForMerge]  = useState([]);
+  const [customMerging,          setCustomMerging]          = useState(false);
+  const [customMergeMessage,     setCustomMergeMessage]     = useState('');
 
   // ── ADDITIVE sync: merge DB-discovered keys into local state on every update ──
   // We NEVER call setDynamicFields with a fresh array — only append new entries.
@@ -371,6 +382,61 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   };
 
+  // ── Toggle a file in/out of the custom merge selection ───────────────────────
+  const handleToggleFileSelect = useCallback((key, storagePath, label) => {
+    setSelectedFilesForMerge((prev) => {
+      const exists = prev.some((f) => f.key === key);
+      if (exists) return prev.filter((f) => f.key !== key);
+      return [...prev, { key, storagePath, label }];
+    });
+  }, []);
+
+  // ── Custom merge: merge exactly the selected files in click order ─────────────
+  const handleCustomMerge = async () => {
+    if (selectedFilesForMerge.length === 0) return;
+    setCustomMerging(true);
+    setCustomMergeMessage('جاري تجهيز الملفات المختارة...');
+    try {
+      // Build filename using the same convention as the standard merge
+      const _fileNum  = localDoc.fileNumber
+        ? String(localDoc.fileNumber).padStart(4, '0')
+        : 'رقم الملف';
+      const _year     = localDoc.createdAt
+        ? new Date(localDoc.createdAt).getFullYear()
+        : new Date().getFullYear();
+      const _count    = localDoc.count             || 'العدد';
+      const _supplier = localDoc.supplierName      || 'اسم المورد';
+      const _certNum  = localDoc.certificateNumber || 'رقم الشهاده';
+      const _item     = localDoc.itemName          || 'اسم الصنف';
+      const _port     = localDoc.arrivalPort       || 'ميناء الوصول';
+      const _tabName  = activeTab === 'documents'  ? 'مستندات' : 'ايصالات';
+      const filename  = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_port} - ${_item} ${_tabName} (مخصص).pdf`;
+
+      const success = await customMergeAndDownload(
+        selectedFilesForMerge,
+        filename,
+        (msg) => setCustomMergeMessage(msg),
+      );
+
+      if (success) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} />
+            تم تحميل الملف المخصص بنجاح
+          </div>
+        );
+        // Exit custom merge mode and clear selection
+        setIsCustomMergeMode(false);
+        setSelectedFilesForMerge([]);
+      }
+    } catch (err) {
+      toast.error(err.message || 'حدث خطأ أثناء الدمج المخصص');
+    } finally {
+      setCustomMerging(false);
+      setCustomMergeMessage('');
+    }
+  };
+
   // ── Derived values ────────────────────────────────────────────────────────────
   const currentDefs       = TAB_CONFIG[activeTab].defs;
   const tabData           = localDoc[activeTab] || {};
@@ -488,10 +554,8 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
                 {currentDefs.map((def) => {
-                  const baseUploadKey = `${activeTab}.${def.key}`;
+                  const baseUploadKey  = `${activeTab}.${def.key}`;
                   const isBaseUploading = uploadingKeys.has(baseUploadKey);
-
-                  // Collect dynamic copies for this base type
                   const copies = activeDynFields.filter((f) => f.baseKey === def.key);
 
                   return (
@@ -503,10 +567,16 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                         isUploading={isBaseUploading}
                         onUpload={(file) => handleUpload(activeTab, def.key, file)}
                         onDelete={() => handleDeleteFile(activeTab, def.key)}
-                        // No onRemove → base cards cannot be deleted
+                        isCustomMergeMode={isCustomMergeMode}
+                        isSelected={selectedFilesForMerge.some((f) => f.key === def.key)}
+                        onToggleSelect={() => handleToggleFileSelect(
+                          def.key,
+                          `${localDoc._id}/${def.key}.pdf`,
+                          def.label,
+                        )}
                       />
 
-                      {/* Dynamic copy cards for this type */}
+                      {/* Dynamic copy cards */}
                       {copies.map((dynField) => {
                         const dynUploadKey   = `${activeTab}.${dynField.key}`;
                         const isDynUploading = uploadingKeys.has(dynUploadKey);
@@ -519,6 +589,13 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                             onUpload={(file) => handleUpload(activeTab, dynField.key, file)}
                             onDelete={() => handleDeleteFile(activeTab, dynField.key)}
                             onRemove={() => handleRemoveDynamicField(activeTab, dynField)}
+                            isCustomMergeMode={isCustomMergeMode}
+                            isSelected={selectedFilesForMerge.some((f) => f.key === dynField.key)}
+                            onToggleSelect={() => handleToggleFileSelect(
+                              dynField.key,
+                              `${localDoc._id}/${dynField.key}.pdf`,
+                              dynField.label,
+                            )}
                           />
                         );
                       })}
@@ -585,25 +662,101 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
           </div>
 
           {/* Section 3: Merge controls */}
+
+          {/* Standard merge progress bar */}
           {merging && <ProgressBar message={mergeMessage} />}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => handleMerge(false)}
-              disabled={merging !== false}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
-            >
-              <Download size={18} />
-              دمج وتحميل فقط
-            </button>
-            <button
-              onClick={() => handleMerge(true)}
-              disabled={merging !== false}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-500 text-white transition-all disabled:opacity-50"
-            >
-              <Trash2 size={18} />
-              تحميل + حذف نهائي
-            </button>
-          </div>
+
+          {/* Custom merge progress bar */}
+          {customMerging && <ProgressBar message={customMergeMessage} />}
+
+          {/* ── Custom merge mode: selection info bar ──────────────────── */}
+          {isCustomMergeMode && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-950/50 border border-teal-700/50 text-sm">
+              <ListChecks size={16} className="text-teal-400 flex-shrink-0" />
+              <span className="text-teal-300 flex-1">
+                {selectedFilesForMerge.length === 0
+                  ? 'انقر على الملفات المرفوعة لاختيارها'
+                  : `تم اختيار ${selectedFilesForMerge.length} ملف — سيتم دمجها بهذا الترتيب`
+                }
+              </span>
+              {selectedFilesForMerge.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFilesForMerge([])}
+                  className="text-xs text-teal-500 hover:text-teal-300 transition-colors underline"
+                >
+                  مسح الاختيار
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Buttons row ────────────────────────────────────────────── */}
+          {!isCustomMergeMode ? (
+            /* Standard mode buttons */
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => handleMerge(false)}
+                disabled={merging !== false}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
+              >
+                <Download size={18} />
+                دمج وتحميل فقط
+              </button>
+              <button
+                onClick={() => handleMerge(true)}
+                disabled={merging !== false}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-500 text-white transition-all disabled:opacity-50"
+              >
+                <Trash2 size={18} />
+                تحميل + حذف نهائي
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIsCustomMergeMode(true); setSelectedFilesForMerge([]); }}
+                disabled={merging !== false}
+                className="
+                  flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm
+                  bg-slate-700/80 border border-slate-600 text-slate-300
+                  hover:bg-teal-900/50 hover:border-teal-600/60 hover:text-teal-300
+                  transition-all disabled:opacity-50
+                "
+              >
+                <SlidersHorizontal size={16} />
+                دمج ملفات معينة
+              </button>
+            </div>
+          ) : (
+            /* Custom merge mode buttons */
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleCustomMerge}
+                disabled={selectedFilesForMerge.length === 0 || customMerging}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {customMerging
+                  ? <Loader2 size={18} className="animate-spin" />
+                  : <ListChecks size={18} />
+                }
+                دمج الملفات المختارة
+                {selectedFilesForMerge.length > 0 && (
+                  <span className="bg-white/20 text-xs px-2 py-0.5 rounded-full">
+                    {selectedFilesForMerge.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIsCustomMergeMode(false); setSelectedFilesForMerge([]); }}
+                disabled={customMerging}
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm border border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all disabled:opacity-50"
+              >
+                <XCircle size={16} />
+                إلغاء
+              </button>
+            </div>
+          )}
 
         </div>
       </div>

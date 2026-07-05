@@ -236,3 +236,43 @@ export async function mergeAndDownload(
 
   return { clearedTab: activeTab, clearedState: clearedTabState, fullyDeleted };
 }
+
+// ─── Custom Merge ─────────────────────────────────────────────────────────────
+
+/**
+ * customMergeAndDownload
+ *
+ * Merges a user-selected, user-ordered list of Supabase storage paths into a
+ * single PDF and downloads it. Completely bypasses buildMergeList and the
+ * standard sequence — the caller dictates the exact order.
+ *
+ * @param {Array<{ key, storagePath, label }>} selectedFiles  – ordered selection
+ * @param {string}  filename    – full filename including extension
+ * @param {function} onProgress – callback(message: string)
+ * @returns {Promise<boolean>}  – true on success, false if nothing to merge
+ */
+export async function customMergeAndDownload(selectedFiles, filename, onProgress) {
+  if (!selectedFiles || selectedFiles.length === 0) return false;
+
+  onProgress?.(`جارٍ تحميل ${selectedFiles.length} ملف مختار…`);
+
+  const masterPdf = await PDFDocument.create();
+
+  for (const item of selectedFiles) {
+    try {
+      const bytes  = await fetchPdfBytes(item.storagePath);
+      const srcPdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+      const copied = await masterPdf.copyPages(srcPdf, srcPdf.getPageIndices());
+      copied.forEach((page) => masterPdf.addPage(page));
+    } catch (err) {
+      console.warn(`⚠️ Custom merge: could not load "${item.label}" (${item.key}):`, err.message);
+    }
+  }
+
+  onProgress?.('جارٍ إنشاء الملف المدموج…');
+  const masterBytes = await masterPdf.save();
+  downloadBlob(masterBytes, filename);
+  onProgress?.('تم تحميل الملف المخصص بنجاح ✅');
+  return true;
+}
+

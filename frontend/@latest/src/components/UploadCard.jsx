@@ -28,7 +28,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-export default function UploadCard({ label, url, isUploading, onUpload, onDelete, onRemove }) {
+export default function UploadCard({ label, url, isUploading, onUpload, onDelete, onRemove, isCustomMergeMode, isSelected, onToggleSelect }) {
   const inputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -75,16 +75,53 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
     );
   }
 
+  // In custom merge mode: uploaded cards get a selection ring, empty cards dim out
+  let modeOverride = {};
+  if (isCustomMergeMode) {
+    if (url && !isUploading) {
+      // Selectable: teal ring when selected, dashed amber when not
+      modeOverride = {
+        borderClass: isSelected
+          ? 'border-teal-400 shadow-teal-400/30'
+          : 'border-amber-500/50 shadow-amber-500/10',
+        bgClass: isSelected ? 'bg-teal-950/40' : 'bg-amber-950/10',
+      };
+    } else {
+      // Empty in custom mode: fully dimmed
+      modeOverride = {
+        borderClass: 'border-slate-700/30',
+        bgClass: 'bg-slate-900/20',
+        dimmed: true,
+      };
+    }
+    borderClass = modeOverride.borderClass ?? borderClass;
+    bgClass     = modeOverride.bgClass     ?? bgClass;
+  }
+
+  // Click handler: in custom merge mode on an uploaded card → toggle selection
+  const handleCardClick = () => {
+    if (isCustomMergeMode) {
+      if (url && !isUploading && onToggleSelect) onToggleSelect();
+      return;
+    }
+    if (!isUploading) inputRef.current?.click();
+  };
+
+
   return (
     <div
       className={`
         relative flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all duration-300
         shadow-lg ${borderClass} ${bgClass}
-        ${!isUploading ? 'hover:scale-[1.02] hover:shadow-xl cursor-pointer' : ''}
+        ${isCustomMergeMode
+          ? (url && !isUploading ? 'cursor-pointer hover:scale-[1.02] hover:shadow-xl' : '')
+          : (!isUploading ? 'hover:scale-[1.02] hover:shadow-xl cursor-pointer' : '')
+        }
+        ${modeOverride.dimmed ? 'opacity-30 pointer-events-none' : ''}
       `}
-      onClick={() => !isUploading && inputRef.current?.click()}
+      onClick={handleCardClick}
     >
-      {/* Hidden file input */}
+      {/* Hidden file input — inactive during custom merge mode */}
       <input
         ref={inputRef}
         type="file"
@@ -94,8 +131,29 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
         aria-label={`رفع ملف ${label}`}
       />
 
-      {/* Remove button — only on dynamic cards (when onRemove is provided) */}
-      {onRemove && (
+      {/* ── Custom merge mode: checkbox overlay ─────────────────────────── */}
+      {isCustomMergeMode && url && !isUploading && (
+        <div
+          className={`
+            absolute top-2 right-2 z-10
+            w-6 h-6 rounded-md border-2 flex items-center justify-center
+            transition-all duration-200
+            ${isSelected
+              ? 'bg-teal-500 border-teal-400 shadow-lg shadow-teal-500/40'
+              : 'bg-slate-800 border-slate-500 hover:border-teal-400'
+            }
+          `}
+        >
+          {isSelected && (
+            <svg viewBox="0 0 12 10" className="w-3.5 h-3 fill-none stroke-white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 5 4.5 8.5 11 1" />
+            </svg>
+          )}
+        </div>
+      )}
+
+      {/* Remove button — only on dynamic cards (when onRemove is provided), hidden in custom merge mode */}
+      {onRemove && !isCustomMergeMode && (
         <button
           type="button"
           title="حذف هذه البطاقة"
@@ -123,54 +181,62 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
         <div className="flex-shrink-0 mt-0.5">{iconEl}</div>
       </div>
 
-      {/* Action area */}
-      <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-white/5">
-        {uploaded ? (
-          <>
-            {/* View link – stops click from bubbling to re-upload */}
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="
-                flex items-center gap-1.5 text-xs font-medium text-emerald-400
-                hover:text-emerald-300 transition-colors
-              "
-            >
-              <ExternalLink size={12} />
-              عرض الملف
-            </a>
-            <div className="flex items-center gap-2">
-              {/* Replace button */}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-                className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1"
+      {/* Action area — hidden during custom merge mode to prevent accidental uploads */}
+      {!isCustomMergeMode && (
+        <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-white/5">
+          {uploaded ? (
+            <>
+              {/* View link */}
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
               >
-                <UploadCloud size={12} />
-                استبدال
-              </button>
-              {/* Delete file from storage */}
-              {onDelete && (
+                <ExternalLink size={12} />
+                عرض الملف
+              </a>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                  className="text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                  onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1"
                 >
-                  <Trash2 size={12} />
-                  حذف
+                  <UploadCloud size={12} />
+                  استبدال
                 </button>
-              )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 size={12} />
+                    حذف
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <UploadCloud size={14} />
+              <span>انقر لرفع PDF</span>
             </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <UploadCloud size={14} />
-            <span>انقر لرفع PDF</span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* In custom merge mode: show a minimal "tap to select" hint on uploaded cards */}
+      {isCustomMergeMode && url && !isUploading && (
+        <div className="mt-auto pt-2 border-t border-white/5 text-xs text-center font-medium transition-colors duration-200">
+          {isSelected
+            ? <span className="text-teal-400">✓ تم الاختيار</span>
+            : <span className="text-amber-400/70">انقر للاختيار</span>
+          }
+        </div>
+      )}
     </div>
   );
 }
+
