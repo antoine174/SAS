@@ -61,7 +61,7 @@ const BASE_KEY_LABEL = {};
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const COMPANIES     = ['مصانع الترياق', 'شركة الزامل'];
-const COMPANY_COLOR = { 'مصانع الترياق': 'emerald', 'شركة الزامل': 'sky' };
+const COMPANY_COLOR = { 'مصانع الترياق': 'blue', 'شركة الزامل': 'sky' };
 
 /**
  * Given the raw tabData from the DB, extract dynamic fields
@@ -446,25 +446,25 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto"
       onClick={(e) => { if (e.target === e.currentTarget) closeDetail(); }}
     >
       <div
         dir="rtl"
-        className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col max-h-[92vh]"
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col max-h-[92vh]"
       >
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className={`px-6 py-4 bg-${accent}-500/10 border-b border-slate-700 flex items-center justify-between flex-shrink-0`}>
+        <div className={`px-6 py-4 bg-${accent}-50 border-b border-slate-200 flex items-center justify-between flex-shrink-0`}>
           <div className="flex items-center gap-3">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-${accent}-500/20 text-${accent}-300 border border-${accent}-500/30`}>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-${accent}-100 text-${accent}-800 border border-${accent}-200`}>
               {localDoc.companyName}
             </span>
-            <span className="text-slate-300 font-mono text-sm">{localDoc.acid}</span>
+            <span className="text-slate-500 font-mono text-sm font-semibold">{localDoc.acid}</span>
           </div>
           <button
             type="button"
             onClick={closeDetail}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
           >
             <X size={16} />
           </button>
@@ -474,16 +474,16 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
           {/* Section 1: Edit metadata fields */}
-          <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4">بيانات الشحنة</h3>
+          <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">بيانات الشحنة</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">اسم الشركة</label>
+                <label className="block text-xs text-slate-700 mb-1 font-medium">اسم الشركة</label>
                 <select
                   value={form.companyName}
                   onChange={(e) => handleFieldChange('companyName', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 >
                   {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -501,13 +501,13 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 { field: 'fileNumber',        label: 'رقم الملف',         mono: false },
               ].map(({ field, label, mono }) => (
                 <div key={field}>
-                  <label className="block text-xs text-slate-400 mb-1">{label}</label>
+                  <label className="block text-xs text-slate-700 mb-1 font-medium">{label}</label>
                   <input
                     type="text"
                     value={form[field]}
                     onChange={(e) => handleFieldChange(field, e.target.value)}
                     dir={mono ? 'ltr' : 'rtl'}
-                    className={`w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors ${mono ? 'font-mono text-left' : ''}`}
+                    className={`w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all ${mono ? 'font-mono text-left' : ''}`}
                   />
                 </div>
               ))}
@@ -516,7 +516,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 <button
                   onClick={handleSaveChanges}
                   disabled={isSaving}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm font-semibold transition-all shadow-sm shadow-blue-600/20 disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   حفظ التعديلات
@@ -527,30 +527,30 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
           </div>
 
           {/* Section 2: Tabbed upload grid */}
-          <div className="border border-slate-700 rounded-2xl overflow-hidden bg-slate-900 shadow-xl">
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
 
             {/* Tab switcher */}
-            <div className="flex border-b border-slate-800">
+            <div className="flex border-b border-slate-200 bg-slate-50/50">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
                     flex-1 flex items-center justify-center gap-2 py-4 text-sm font-bold transition-all duration-300 relative
-                    ${activeTab === tab.id ? 'text-emerald-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}
+                    ${activeTab === tab.id ? 'text-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}
                   `}
                 >
                   <tab.icon size={18} />
                   {tab.label}
                   {activeTab === tab.id && (
-                    <div className="absolute bottom-0 inset-x-0 h-0.5 bg-emerald-500 shadow-[0_-2px_10px_rgba(16,185,129,0.5)]" />
+                    <div className="absolute bottom-0 inset-x-0 h-0.5 bg-blue-600 shadow-sm" />
                   )}
                 </button>
               ))}
             </div>
 
             {/* Upload grid */}
-            <div className="p-4 sm:p-6 bg-slate-950/30 space-y-6">
+            <div className="p-4 sm:p-6 bg-slate-50/50 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
                 {currentDefs.map((def) => {
@@ -606,17 +606,17 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               </div>
 
               {/* ── "Add More" toolbar ───────────────────────────────────── */}
-              <div className="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-800/70">
+              <div className="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-200">
 
                 {/* Document type dropdown */}
                 <div className="flex-1 min-w-40">
-                  <label className="block text-xs text-slate-500 mb-1.5">إضافة نسخة من</label>
+                  <label className="block text-xs text-slate-700 font-medium mb-1.5">إضافة نسخة من</label>
                   <select
                     value={addDropdown[activeTab]}
                     onChange={(e) =>
                       setAddDropdown((prev) => ({ ...prev, [activeTab]: e.target.value }))
                     }
-                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   >
                     <option value="">— اختر النوع —</option>
                     {currentDefs.map((def) => (
@@ -627,7 +627,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
                 {/* Quantity input */}
                 <div className="w-24 flex-shrink-0">
-                  <label className="block text-xs text-slate-500 mb-1.5">
+                  <label className="block text-xs text-slate-700 font-medium mb-1.5">
                     <span className="flex items-center gap-1"><Hash size={11} /> الكمية</span>
                   </label>
                   <input
@@ -638,7 +638,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                     onChange={(e) =>
                       setAddQty((prev) => ({ ...prev, [activeTab]: e.target.value }))
                     }
-                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-sm text-slate-200 text-center outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   />
                 </div>
 
@@ -649,8 +649,8 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                   className="
                     flex-shrink-0 flex items-center gap-2 self-end
                     px-4 py-2.5 rounded-xl text-sm font-semibold
-                    bg-emerald-600/20 border border-emerald-500/40 text-emerald-400
-                    hover:bg-emerald-600/40 hover:border-emerald-500/70 hover:text-emerald-300
+                    bg-blue-50 border border-blue-200 text-blue-600
+                    hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300
                     transition-all duration-200
                   "
                 >
@@ -671,9 +671,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
           {/* ── Custom merge mode: selection info bar ──────────────────── */}
           {isCustomMergeMode && (
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-950/50 border border-teal-700/50 text-sm">
-              <ListChecks size={16} className="text-teal-400 flex-shrink-0" />
-              <span className="text-teal-300 flex-1">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm shadow-sm">
+              <ListChecks size={16} className="text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 flex-1 font-medium">
                 {selectedFilesForMerge.length === 0
                   ? 'انقر على الملفات المرفوعة لاختيارها'
                   : `تم اختيار ${selectedFilesForMerge.length} ملف — سيتم دمجها بهذا الترتيب`
@@ -683,7 +683,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 <button
                   type="button"
                   onClick={() => setSelectedFilesForMerge([])}
-                  className="text-xs text-teal-500 hover:text-teal-300 transition-colors underline"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors underline"
                 >
                   مسح الاختيار
                 </button>
@@ -698,7 +698,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               <button
                 onClick={() => handleMerge(false)}
                 disabled={merging !== false}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
               >
                 <Download size={18} />
                 دمج وتحميل فقط
@@ -706,7 +706,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               <button
                 onClick={() => handleMerge(true)}
                 disabled={merging !== false}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-500 text-white transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
               >
                 <Trash2 size={18} />
                 تحميل + حذف نهائي
@@ -717,9 +717,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 disabled={merging !== false}
                 className="
                   flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm
-                  bg-slate-700/80 border border-slate-600 text-slate-300
-                  hover:bg-teal-900/50 hover:border-teal-600/60 hover:text-teal-300
-                  transition-all disabled:opacity-50
+                  bg-white border border-slate-300 text-slate-700
+                  hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700
+                  transition-all disabled:opacity-50 shadow-sm
                 "
               >
                 <SlidersHorizontal size={16} />
@@ -733,7 +733,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 type="button"
                 onClick={handleCustomMerge}
                 disabled={selectedFilesForMerge.length === 0 || customMerging}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {customMerging
                   ? <Loader2 size={18} className="animate-spin" />
@@ -750,7 +750,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 type="button"
                 onClick={() => { setIsCustomMergeMode(false); setSelectedFilesForMerge([]); }}
                 disabled={customMerging}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm border border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm disabled:opacity-50"
               >
                 <XCircle size={16} />
                 إلغاء

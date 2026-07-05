@@ -54,9 +54,8 @@ const EMPTY_FILTERS = {
   certificateNumber: '', arrivalPort: '', fileNumber: '',
 };
 
-// Colour accent per company (used for badge)
 const COMPANY_COLOR = {
-  'مصانع الترياق': 'emerald',
+  'مصانع الترياق': 'blue',
   'شركة الزامل': 'sky',
 };
 
@@ -157,27 +156,28 @@ export default function App() {
 
   // ── Shared input class ──────────────────────────────────────────────────────
   const inputCls = `
-    w-full bg-slate-800/60 border border-slate-600 text-slate-100 placeholder-slate-500
-    rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500
-    focus:ring-1 focus:ring-emerald-500/40 transition-all text-right
+    w-full bg-white border border-slate-300 text-slate-800 placeholder-slate-400
+    rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500
+    focus:ring-2 focus:ring-blue-500/20 transition-all text-right
   `;
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 font-[Tajawal,sans-serif]">
+    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-800 font-[Tajawal,sans-serif]">
 
-      <ToastContainer position="bottom-left" rtl theme="dark" pauseOnHover closeOnClick newestOnTop />
+      <ToastContainer position="bottom-left" rtl pauseOnHover closeOnClick newestOnTop />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-              <ShieldCheck size={18} className="text-emerald-400" />
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+              <ShieldCheck size={18} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-100 leading-none">SAS</p>
+              <p className="text-sm font-bold text-slate-800 leading-none">SAS</p>
               <p className="text-xs text-slate-500 leading-tight">نظام التخليص الجمركي</p>
+
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -192,8 +192,8 @@ export default function App() {
 
         {/* Page title */}
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">سجل الشحنات</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-800">سجل الشحنات</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
             إضافة شحنة جديدة أو البحث في السجلات الموجودة
           </p>
         </div>
@@ -202,13 +202,13 @@ export default function App() {
         <ConsignmentHeader onCreated={() => runSearch(EMPTY_FILTERS)} />
 
         {/* ── Search / filter panel ───────────────────────────────────────── */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 space-y-4">
 
           <div className="flex items-center gap-2">
             <Search size={16} className="text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-300">البحث والتصفية</h2>
+            <h2 className="text-sm font-semibold text-slate-700">البحث والتصفية</h2>
             {hasActiveFilters && (
-              <span className="text-xs text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
                 فلاتر نشطة
               </span>
             )}
@@ -234,7 +234,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setFilters((p) => ({ ...p, [key]: '' }))}
-                      className="absolute inset-y-0 left-2 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                      className="absolute inset-y-0 left-2 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                     >
                       <X size={13} />
                     </button>
@@ -252,8 +252,8 @@ export default function App() {
               onClick={() => runSearch()}
               disabled={isSearching}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold
-                         bg-emerald-600 hover:bg-emerald-500 text-white
-                         transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20
+                         bg-blue-600 hover:bg-blue-700 text-white
+                         transition-all disabled:opacity-50 shadow-md shadow-blue-600/20
                          hover:scale-105 active:scale-100"
             >
               {isSearching
@@ -269,8 +269,8 @@ export default function App() {
                 id="btn-clear-filters"
                 onClick={() => { clearFilters(); runSearch(EMPTY_FILTERS); }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
-                           border border-slate-600 text-slate-400 hover:text-slate-200
-                           hover:border-slate-500 transition-all"
+                           bg-white border border-slate-300 text-slate-600 hover:text-slate-800
+                           hover:bg-slate-50 transition-all"
               >
                 <X size={14} />
                 مسح الفلاتر
@@ -291,7 +291,7 @@ export default function App() {
         {isSearching && !hasSearched && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-40 rounded-2xl bg-slate-800/60 border border-slate-700 animate-pulse" />
+              <div key={i} className="h-40 rounded-2xl bg-white border border-slate-200 shadow-sm animate-pulse" />
             ))}
           </div>
         )}
@@ -299,12 +299,12 @@ export default function App() {
         {/* Empty state */}
         {hasSearched && !isSearching && results.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
-              <FileStack size={28} className="text-slate-600" />
+            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+              <FileStack size={28} className="text-slate-400" />
             </div>
             <div>
-              <p className="text-slate-400 font-semibold">لا توجد نتائج</p>
-              <p className="text-slate-600 text-sm mt-1">
+              <p className="text-slate-700 font-semibold">لا توجد نتائج</p>
+              <p className="text-slate-500 text-sm mt-1">
                 {hasActiveFilters ? 'جرّب تعديل الفلاتر أو مسحها' : 'لا توجد شحنات مسجّلة بعد'}
               </p>
             </div>
@@ -334,16 +334,16 @@ export default function App() {
                 <div
                   key={doc._id}
                   onClick={() => openDetail(doc)}
-                  className="group relative bg-slate-800/50 hover:bg-slate-800 border border-slate-700
-                             hover:border-emerald-700/50 rounded-2xl p-5 transition-all duration-200
-                             hover:shadow-lg hover:shadow-emerald-900/20 cursor-pointer"
+                  className="group relative bg-white hover:bg-slate-50 border border-slate-200
+                             hover:border-blue-300 rounded-2xl p-5 transition-all duration-200
+                             shadow-sm hover:shadow-md cursor-pointer"
                 >
                   {/* Company badge + timestamp */}
                   <div className="flex items-start justify-between gap-2 mb-4">
                     <span className={`
                       text-xs font-semibold px-2.5 py-1 rounded-full
-                      bg-${accentColor}-500/15 text-${accentColor}-300
-                      border border-${accentColor}-500/30
+                      bg-${accentColor}-100 text-${accentColor}-800
+                      border border-${accentColor}-200
                     `}>
                       {doc.companyName}
                     </span>
@@ -365,9 +365,9 @@ export default function App() {
                     ].map(({ key, labelAr, Icon, mono }) =>
                       doc[key] ? (
                         <div key={key} className="flex items-center gap-2 text-sm">
-                          <Icon size={13} className="text-slate-500 flex-shrink-0" />
+                          <Icon size={13} className="text-slate-400 flex-shrink-0" />
                           <span className="text-slate-500 text-xs w-20 flex-shrink-0">{labelAr}</span>
-                          <span className={`text-slate-200 truncate ${mono ? 'font-mono text-emerald-300' : ''}`}>
+                          <span className={`text-slate-800 truncate ${mono ? 'font-mono text-blue-700' : ''}`}>
                             {doc[key]}
                           </span>
                         </div>
@@ -376,8 +376,8 @@ export default function App() {
                   </div>
 
                   {/* Bottom row: view hint + delete button */}
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-xs text-slate-600 group-hover:text-emerald-500 transition-colors">
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                    <span className="flex items-center gap-1 text-xs text-slate-500 group-hover:text-blue-600 transition-colors">
                       <Eye size={12} />
                       عرض التفاصيل
                     </span>
@@ -386,8 +386,8 @@ export default function App() {
                       id={`btn-delete-${doc._id}`}
                       onClick={(e) => { e.stopPropagation(); openDeleteModal(doc._id, doc.acid || doc._id); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                 text-rose-400 border border-rose-500/30 bg-rose-500/10
-                                 hover:bg-rose-500/20 hover:border-rose-500/50 hover:text-rose-300
+                                 text-red-600 border border-red-200 bg-white
+                                 hover:bg-red-50 hover:border-red-300
                                  transition-all duration-200"
                     >
                       <Trash2 size={13} />
@@ -414,30 +414,30 @@ export default function App() {
       {/* ── Delete Password Modal ─────────────────────────────────────────────── */}
       {deleteModal.show && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) closeDeleteModal(); }}
         >
           <div
             dir="rtl"
-            className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-5"
+            className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-5"
           >
             {/* Modal header */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center flex-shrink-0">
-                <KeyRound size={18} className="text-rose-400" />
+              <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0">
+                <KeyRound size={18} className="text-red-600" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-100">تأكيد الحذف</h3>
-                <p className="text-xs text-slate-400 leading-snug">
+                <h3 className="text-base font-bold text-slate-800">تأكيد الحذف</h3>
+                <p className="text-xs text-slate-500 leading-snug">
                   حذف الشحنة:{' '}
-                  <span className="font-mono text-rose-300">{deleteModal.label}</span>
+                  <span className="font-mono text-red-600 font-semibold">{deleteModal.label}</span>
                 </p>
               </div>
             </div>
 
             {/* Warning */}
-            <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl px-4 py-3">
-              <p className="text-xs text-rose-300 leading-relaxed">
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-red-800 leading-relaxed">
                 ⚠️ سيتم <strong>حذف هذا السجل نهائياً</strong> من قاعدة البيانات.
                 لا يمكن التراجع عن هذا الإجراء.
               </p>
@@ -445,7 +445,7 @@ export default function App() {
 
             {/* Password input */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 block">
+              <label className="text-xs font-semibold text-slate-700 block">
                 رمز تأكيد الحذف
               </label>
               <input
@@ -457,9 +457,9 @@ export default function App() {
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
-                className="w-full bg-slate-800 border border-slate-600 focus:border-rose-500
-                           focus:ring-1 focus:ring-rose-500/40 rounded-xl px-4 py-3
-                           text-sm text-slate-100 placeholder-slate-500 outline-none
+                className="w-full bg-white border border-slate-300 focus:border-red-500
+                           focus:ring-2 focus:ring-red-500/20 rounded-xl px-4 py-3
+                           text-sm text-slate-800 placeholder-slate-400 outline-none
                            transition-all text-right"
               />
             </div>
@@ -469,8 +469,8 @@ export default function App() {
               <button
                 type="button"
                 onClick={closeDeleteModal}
-                className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300
-                           text-sm font-semibold hover:bg-slate-800 transition-colors"
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700
+                           text-sm font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors"
               >
                 إلغاء
               </button>
@@ -480,9 +480,9 @@ export default function App() {
                 onClick={confirmDelete}
                 disabled={isDeleting}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
-                           bg-rose-600 hover:bg-rose-500 disabled:opacity-60
+                           bg-red-600 hover:bg-red-700 disabled:opacity-60
                            text-white text-sm font-bold transition-colors
-                           shadow-lg shadow-rose-900/30"
+                           shadow-md shadow-red-600/20"
               >
                 {isDeleting
                   ? <Loader2 size={15} className="animate-spin" />
@@ -496,7 +496,7 @@ export default function App() {
       )}
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-600">
+      <footer className="border-t border-slate-200 mt-16 py-6 text-center text-xs text-slate-500">
         SAS — نظام التخليص الجمركي © {new Date().getFullYear()}
       </footer>
     </div>

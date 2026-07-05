@@ -66,22 +66,22 @@ export default function ConsignmentHeader({ onCreated }) {
   };
 
   const inputCls = `
-    w-full bg-slate-800/60 border border-slate-600 text-slate-100 placeholder-slate-500
-    rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500
-    focus:ring-1 focus:ring-emerald-500/40 transition-all text-right
+    w-full bg-white border border-slate-300 text-slate-800 placeholder-slate-400
+    rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500
+    focus:ring-2 focus:ring-blue-500/20 transition-all text-right
   `;
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
+    <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
 
       {/* ── Toggle header ─────────────────────────────────────────────────── */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-slate-200 hover:bg-slate-800/70 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <PlusCircle size={16} className="text-emerald-400" />
+          <PlusCircle size={16} className="text-blue-600" />
           إضافة شحنة جديدة
         </div>
         {expanded
@@ -92,14 +92,14 @@ export default function ConsignmentHeader({ onCreated }) {
 
       {/* ── Collapsible form body ─────────────────────────────────────────── */}
       {expanded && (
-        <div className="border-t border-slate-700 px-5 pb-5 pt-4 space-y-4">
+        <div className="border-t border-slate-200 px-5 pb-5 pt-4 space-y-4">
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
             {/* اسم الشركة – required enum */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
-                اسم الشركة <span className="text-rose-400">*</span>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">
+                اسم الشركة <span className="text-red-500">*</span>
               </label>
               <select
                 id="form-companyName"
@@ -115,8 +115,8 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* رقم الشحنة – required */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
-                رقم البوليصة <span className="text-rose-400">*</span>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">
+                رقم البوليصة <span className="text-red-500">*</span>
               </label>
               <input
                 id="form-consignmentNumber"
@@ -131,8 +131,8 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* ACID – required */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
-                ACID <span className="text-rose-400">*</span>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">
+                ACID <span className="text-red-500">*</span>
               </label>
               <input
                 id="form-acid"
@@ -147,7 +147,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* رقم تسلسل الفاتورة */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">رقم تسلسل الفاتورة</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">رقم تسلسل الفاتورة</label>
               <input
                 id="form-invoiceSequenceNumber"
                 type="text"
@@ -160,7 +160,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* اسم الصنف */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">اسم الصنف</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">اسم الصنف</label>
               <input
                 id="form-itemName"
                 type="text"
@@ -173,7 +173,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* العدد – LTR input because it contains numbers/operators */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">
                 العدد
                 <span className="ms-1 text-slate-500 font-normal">(مثال: 3X20+7*10)</span>
               </label>
@@ -190,7 +190,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* اسم المورد */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">اسم المورد</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">اسم المورد</label>
               <input
                 id="form-supplierName"
                 type="text"
@@ -203,7 +203,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* رقم الشهاده */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">رقم الشهاده</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">رقم الشهاده</label>
               <input
                 id="form-certificateNumber"
                 type="text"
@@ -216,7 +216,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* ميناء الوصول */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">ميناء الوصول</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">ميناء الوصول</label>
               <input
                 id="form-arrivalPort"
                 type="text"
@@ -229,7 +229,7 @@ export default function ConsignmentHeader({ onCreated }) {
 
             {/* رقم الملف */}
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">رقم الملف</label>
+              <label className="block text-xs text-slate-700 mb-1.5 font-medium">رقم الملف</label>
               <input
                 id="form-fileNumber"
                 type="text"
@@ -250,9 +250,9 @@ export default function ConsignmentHeader({ onCreated }) {
               onClick={handleCreate}
               disabled={loading}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold
-                         bg-emerald-600 hover:bg-emerald-500 text-white
+                         bg-blue-600 hover:bg-blue-700 text-white
                          transition-all disabled:opacity-50
-                         shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-100"
+                         shadow-md shadow-blue-600/20 hover:scale-105 active:scale-100"
             >
               <PlusCircle size={15} />
               {loading ? 'جارٍ الإنشاء…' : 'إضافة الشحنة'}

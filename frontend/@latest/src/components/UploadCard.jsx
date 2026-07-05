@@ -47,29 +47,29 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
   let statusBadge = null;
 
   if (isUploading) {
-    borderClass = 'border-sky-400 shadow-sky-400/20';
-    bgClass     = 'bg-sky-950/30';
-    iconEl      = <Loader2 size={28} className="text-sky-400 animate-spin" />;
+    borderClass = 'border-sky-400 shadow-sm shadow-sky-100';
+    bgClass     = 'bg-sky-50';
+    iconEl      = <Loader2 size={28} className="text-sky-500 animate-spin" />;
     statusBadge = (
-      <span className="text-xs font-medium text-sky-400 bg-sky-900/50 px-2 py-0.5 rounded-full">
+      <span className="text-xs font-medium text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
         جارٍ الرفع…
       </span>
     );
   } else if (uploaded) {
-    borderClass = 'border-emerald-500 shadow-emerald-500/20';
-    bgClass     = 'bg-emerald-950/30';
-    iconEl      = <CheckCircle2 size={28} className="text-emerald-400" />;
+    borderClass = 'border-blue-500 shadow-sm shadow-blue-100';
+    bgClass     = 'bg-white';
+    iconEl      = <CheckCircle2 size={28} className="text-blue-500" />;
     statusBadge = (
-      <span className="text-xs font-medium text-emerald-400 bg-emerald-900/50 px-2 py-0.5 rounded-full">
+      <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
         تم الرفع ✓
       </span>
     );
   } else {
-    borderClass = 'border-slate-600/60';
-    bgClass     = 'bg-slate-800/40';
+    borderClass = 'border-slate-200 shadow-sm';
+    bgClass     = 'bg-white';
     iconEl      = <FileText size={28} className="text-slate-400" />;
     statusBadge = (
-      <span className="text-xs font-medium text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded-full">
+      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
         اختياري
       </span>
     );
@@ -79,18 +79,18 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
   let modeOverride = {};
   if (isCustomMergeMode) {
     if (url && !isUploading) {
-      // Selectable: teal ring when selected, dashed amber when not
+      // Selectable: blue ring when selected, dashed slate when not
       modeOverride = {
         borderClass: isSelected
-          ? 'border-teal-400 shadow-teal-400/30'
-          : 'border-amber-500/50 shadow-amber-500/10',
-        bgClass: isSelected ? 'bg-teal-950/40' : 'bg-amber-950/10',
+          ? 'border-blue-500 shadow-md shadow-blue-500/20'
+          : 'border-slate-300 border-dashed shadow-sm',
+        bgClass: isSelected ? 'bg-blue-50/50' : 'bg-slate-50',
       };
     } else {
       // Empty in custom mode: fully dimmed
       modeOverride = {
-        borderClass: 'border-slate-700/30',
-        bgClass: 'bg-slate-900/20',
+        borderClass: 'border-slate-200',
+        bgClass: 'bg-slate-50',
         dimmed: true,
       };
     }
@@ -139,8 +139,8 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
             w-6 h-6 rounded-md border-2 flex items-center justify-center
             transition-all duration-200
             ${isSelected
-              ? 'bg-teal-500 border-teal-400 shadow-lg shadow-teal-500/40'
-              : 'bg-slate-800 border-slate-500 hover:border-teal-400'
+              ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-600/30'
+              : 'bg-white border-slate-300 hover:border-blue-400'
             }
           `}
         >
@@ -161,8 +161,8 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
           className="
             absolute top-2 left-2 z-10
             w-6 h-6 flex items-center justify-center rounded-full
-            bg-rose-500/20 border border-rose-500/40 text-rose-400
-            hover:bg-rose-500/40 hover:text-rose-300
+            bg-red-50 border border-red-200 text-red-500
+            hover:bg-red-100 hover:text-red-600
             transition-all duration-200
           "
         >
@@ -173,7 +173,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
       {/* Card header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-slate-100 leading-snug line-clamp-2">
+          <p className="font-semibold text-sm text-slate-800 leading-snug line-clamp-2">
             {label}
           </p>
           <div className="mt-1.5">{statusBadge}</div>
@@ -183,7 +183,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
 
       {/* Action area — hidden during custom merge mode to prevent accidental uploads */}
       {!isCustomMergeMode && (
-        <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-white/5">
+        <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-slate-100">
           {uploaded ? (
             <>
               {/* View link */}
@@ -192,7 +192,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
               >
                 <ExternalLink size={12} />
                 عرض الملف
@@ -201,7 +201,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1"
+                  className="text-xs text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1"
                 >
                   <UploadCloud size={12} />
                   استبدال
@@ -210,7 +210,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                    className="text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                    className="text-xs text-red-500 hover:text-red-600 transition-colors flex items-center gap-1"
                   >
                     <Trash2 size={12} />
                     حذف
@@ -219,7 +219,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <UploadCloud size={14} />
               <span>انقر لرفع PDF</span>
             </div>
@@ -229,10 +229,10 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
 
       {/* In custom merge mode: show a minimal "tap to select" hint on uploaded cards */}
       {isCustomMergeMode && url && !isUploading && (
-        <div className="mt-auto pt-2 border-t border-white/5 text-xs text-center font-medium transition-colors duration-200">
+        <div className="mt-auto pt-2 border-t border-slate-200 text-xs text-center font-medium transition-colors duration-200">
           {isSelected
-            ? <span className="text-teal-400">✓ تم الاختيار</span>
-            : <span className="text-amber-400/70">انقر للاختيار</span>
+            ? <span className="text-blue-600">✓ تم الاختيار</span>
+            : <span className="text-slate-400">انقر للاختيار</span>
           }
         </div>
       )}
