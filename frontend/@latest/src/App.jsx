@@ -43,11 +43,15 @@ const FIELDS = [
   { key: 'itemName',              labelAr: 'اسم الصنف',           icon: Package,      mono: false },
   { key: 'count',                 labelAr: 'العدد',               icon: Layers,       mono: true  },
   { key: 'supplierName',          labelAr: 'اسم المورد',          icon: Truck,        mono: false },
+  { key: 'certificateNumber',     labelAr: 'رقم الشهاده',       icon: Hash,         mono: false },
+  { key: 'arrivalPort',           labelAr: 'ميناء الوصول',       icon: Package,      mono: false },
+  { key: 'fileNumber',            labelAr: 'رقم الملف',           icon: Layers,       mono: false },
 ];
 
 const EMPTY_FILTERS = {
   companyName: '', acid: '', invoiceSequenceNumber: '',
   consignmentNumber: '', itemName: '', count: '', supplierName: '',
+  certificateNumber: '', arrivalPort: '', fileNumber: '',
 };
 
 // Colour accent per company (used for badge)
@@ -349,12 +353,15 @@ export default function App() {
                   {/* Field grid */}
                   <div className="space-y-2">
                     {[
-                      { key: 'acid',                  labelAr: 'ACID',             Icon: FlaskConical, mono: true  },
+                      { key: 'acid',                  labelAr: 'ACID',              Icon: FlaskConical, mono: true  },
                       { key: 'invoiceSequenceNumber', labelAr: 'رقم تسلسل الفاتورة', Icon: Receipt,   mono: true  },
                       { key: 'consignmentNumber',     labelAr: 'رقم البوليصة',    Icon: Hash,         mono: true  },
                       { key: 'itemName',              labelAr: 'الصنف',            Icon: Package,      mono: false },
                       { key: 'count',                 labelAr: 'العدد',            Icon: Layers,       mono: true  },
                       { key: 'supplierName',          labelAr: 'المورد',           Icon: Truck,        mono: false },
+                      { key: 'certificateNumber',     labelAr: 'رقم الشهاده',      Icon: Hash,         mono: false },
+                      { key: 'arrivalPort',           labelAr: 'ميناء الوصول',      Icon: Package,      mono: false },
+                      { key: 'fileNumber',            labelAr: 'رقم الملف',          Icon: Layers,       mono: false },
                     ].map(({ key, labelAr, Icon, mono }) =>
                       doc[key] ? (
                         <div key={key} className="flex items-center gap-2 text-sm">

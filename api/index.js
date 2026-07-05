@@ -79,15 +79,18 @@ app.get('/api/health', (req, res) => {
 app.get('/api/consignments', async (req, res) => {
   try {
     const query = {};
-    const { companyName, acid, invoiceSequenceNumber, consignmentNumber, itemName, count, supplierName } = req.query;
+    const { companyName, acid, invoiceSequenceNumber, consignmentNumber, itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber } = req.query;
 
-    if (companyName) query.companyName = { $regex: companyName, $options: 'i' };
-    if (acid) query.acid = { $regex: acid, $options: 'i' };
+    if (companyName)         query.companyName         = { $regex: companyName,         $options: 'i' };
+    if (acid)                query.acid                = { $regex: acid,                $options: 'i' };
     if (invoiceSequenceNumber) query.invoiceSequenceNumber = { $regex: invoiceSequenceNumber, $options: 'i' };
-    if (consignmentNumber) query.consignmentNumber = { $regex: consignmentNumber, $options: 'i' };
-    if (itemName) query.itemName = { $regex: itemName, $options: 'i' };
-    if (count) query.count = { $regex: count, $options: 'i' };
-    if (supplierName) query.supplierName = { $regex: supplierName, $options: 'i' };
+    if (consignmentNumber)   query.consignmentNumber   = { $regex: consignmentNumber,   $options: 'i' };
+    if (itemName)            query.itemName            = { $regex: itemName,            $options: 'i' };
+    if (count)               query.count               = { $regex: count,               $options: 'i' };
+    if (supplierName)        query.supplierName        = { $regex: supplierName,        $options: 'i' };
+    if (certificateNumber)   query.certificateNumber   = { $regex: certificateNumber,   $options: 'i' };
+    if (arrivalPort)         query.arrivalPort         = { $regex: arrivalPort,         $options: 'i' };
+    if (fileNumber)          query.fileNumber          = { $regex: fileNumber,          $options: 'i' };
 
     const docs = await Consignment.find(query).sort({ createdAt: -1 }).limit(100);
     res.json(docs);
@@ -115,6 +118,9 @@ app.post('/api/consignments', async (req, res) => {
       itemName,
       count,
       supplierName,
+      certificateNumber,
+      arrivalPort,
+      fileNumber,
     } = req.body;
 
     // Only companyName and acid are required
@@ -129,6 +135,9 @@ app.post('/api/consignments', async (req, res) => {
       itemName,
       count,
       supplierName,
+      certificateNumber,
+      arrivalPort,
+      fileNumber,
     });
 
     res.status(201).json(doc);
@@ -159,6 +168,9 @@ app.put('/api/consignments/:id', async (req, res) => {
       itemName,
       count,
       supplierName,
+      certificateNumber,
+      arrivalPort,
+      fileNumber,
     } = req.body;
 
     if (!companyName || !acid)
@@ -167,13 +179,16 @@ app.put('/api/consignments/:id', async (req, res) => {
     const doc = await Consignment.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    doc.companyName = companyName;
-    doc.acid = acid;
+    doc.companyName           = companyName;
+    doc.acid                  = acid;
     doc.invoiceSequenceNumber = invoiceSequenceNumber;
-    doc.consignmentNumber = consignmentNumber;
-    doc.itemName = itemName;
-    doc.count = count;
-    doc.supplierName = supplierName;
+    doc.consignmentNumber     = consignmentNumber;
+    doc.itemName              = itemName;
+    doc.count                 = count;
+    doc.supplierName          = supplierName;
+    doc.certificateNumber     = certificateNumber;
+    doc.arrivalPort           = arrivalPort;
+    doc.fileNumber            = fileNumber;
 
     await doc.save();
     res.json(doc);

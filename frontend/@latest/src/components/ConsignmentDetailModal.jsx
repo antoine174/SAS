@@ -134,6 +134,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     itemName:              detailDoc.itemName              || '',
     count:                 detailDoc.count                 || '',
     supplierName:          detailDoc.supplierName          || '',
+    certificateNumber:     detailDoc.certificateNumber     || '',
+    arrivalPort:           detailDoc.arrivalPort           || '',
+    fileNumber:            detailDoc.fileNumber            || '',
   });
 
   const [isSaving,      setIsSaving]      = useState(false);
@@ -424,9 +427,12 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 { field: 'acid',                  label: 'ACID',                 mono: true  },
                 { field: 'invoiceSequenceNumber', label: 'رقم تسلسل الفاتورة',  mono: true  },
                 { field: 'consignmentNumber',     label: 'رقم البوليصة',         mono: true  },
-                { field: 'itemName',              label: 'اسم الصنف',            mono: false },
-                { field: 'count',                 label: 'العدد',                mono: true  },
-                { field: 'supplierName',          label: 'اسم المورد',           mono: false },
+                { field: 'itemName',          label: 'اسم الصنف',        mono: false },
+                { field: 'count',             label: 'العدد',             mono: true  },
+                { field: 'supplierName',      label: 'اسم المورد',       mono: false },
+                { field: 'certificateNumber', label: 'رقم الشهاده',      mono: false },
+                { field: 'arrivalPort',       label: 'ميناء الوصول',     mono: false },
+                { field: 'fileNumber',        label: 'رقم الملف',         mono: false },
               ].map(({ field, label, mono }) => (
                 <div key={field}>
                   <label className="block text-xs text-slate-400 mb-1">{label}</label>

@@ -4,7 +4,8 @@
  *
  * Collapsible card for creating a new consignment record.
  * Fields: companyName (dropdown, required), acid (required),
- *         invoiceSequenceNumber, consignmentNumber, itemName, count, supplierName.
+ *         invoiceSequenceNumber, consignmentNumber, itemName, count, supplierName,
+ *         certificateNumber, arrivalPort, fileNumber.
  *
  * Props:
  *   onCreated {function} – called with no args after a successful POST
@@ -18,13 +19,16 @@ import { fetchApi } from '../lib/api';
 const COMPANIES = ['مصانع الترياق', 'شركة الزامل'];
 
 const EMPTY_FORM = {
-  companyName: COMPANIES[0],
-  acid: '',
+  companyName:           COMPANIES[0],
+  acid:                  '',
   invoiceSequenceNumber: '',
-  consignmentNumber: '',
-  itemName: '',
-  count: '',
-  supplierName: '',
+  consignmentNumber:     '',
+  itemName:              '',
+  count:                 '',
+  supplierName:          '',
+  certificateNumber:     '',
+  arrivalPort:           '',
+  fileNumber:            '',
 };
 
 export default function ConsignmentHeader({ onCreated }) {
@@ -193,6 +197,45 @@ export default function ConsignmentHeader({ onCreated }) {
                 placeholder="اسم المورد"
                 value={form.supplierName}
                 onChange={setField('supplierName')}
+                className={inputCls}
+              />
+            </div>
+
+            {/* رقم الشهاده */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">رقم الشهاده</label>
+              <input
+                id="form-certificateNumber"
+                type="text"
+                placeholder="رقم الشهادة"
+                value={form.certificateNumber}
+                onChange={setField('certificateNumber')}
+                className={inputCls}
+              />
+            </div>
+
+            {/* ميناء الوصول */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">ميناء الوصول</label>
+              <input
+                id="form-arrivalPort"
+                type="text"
+                placeholder="اسم الميناء"
+                value={form.arrivalPort}
+                onChange={setField('arrivalPort')}
+                className={inputCls}
+              />
+            </div>
+
+            {/* رقم الملف */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">رقم الملف</label>
+              <input
+                id="form-fileNumber"
+                type="text"
+                placeholder="رقم الملف"
+                value={form.fileNumber}
+                onChange={setField('fileNumber')}
                 className={inputCls}
               />
             </div>
