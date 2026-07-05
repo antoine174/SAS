@@ -5,28 +5,30 @@
  * Displays a single document slot in the upload grid.
  * Visual states:
  *   - uploaded   → green border + checkmark + "عرض" link
- *   - mandatory  → red/amber border + warning icon
  *   - optional   → slate border + "اختياري" badge
+ *   - uploading  → sky border + spinner
  *
  * Props:
- *   label       {string}   – Arabic display name
- *   mandatory   {boolean}
- *   url         {string|null} – uploaded file's public URL
- *   isUploading {boolean}  – show spinner while uploading
- *   onUpload    {function} – called with a File object
+ *   label       {string}        – Arabic display name
+ *   url         {string|null}   – uploaded file's public URL
+ *   isUploading {boolean}       – show spinner while uploading
+ *   onUpload    {function}      – called with a File object
+ *   onDelete    {function}      – called to delete the uploaded file from storage
+ *   onRemove    {function|null} – if provided, shows a remove button (dynamic cards only)
  */
 
 import { useRef } from 'react';
 import {
   CheckCircle2,
-  AlertCircle,
   UploadCloud,
   Loader2,
   ExternalLink,
   FileText,
+  X,
+  Trash2,
 } from 'lucide-react';
 
-export default function UploadCard({ label, mandatory, url, isUploading, onUpload }) {
+export default function UploadCard({ label, url, isUploading, onUpload, onDelete, onRemove }) {
   const inputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -39,10 +41,10 @@ export default function UploadCard({ label, mandatory, url, isUploading, onUploa
   // ── Derived state ──────────────────────────────────────────────────────────
   const uploaded = !!url;
 
-  let borderClass   = '';
-  let bgClass       = '';
-  let iconEl        = null;
-  let statusBadge   = null;
+  let borderClass = '';
+  let bgClass     = '';
+  let iconEl      = null;
+  let statusBadge = null;
 
   if (isUploading) {
     borderClass = 'border-sky-400 shadow-sky-400/20';
@@ -60,15 +62,6 @@ export default function UploadCard({ label, mandatory, url, isUploading, onUploa
     statusBadge = (
       <span className="text-xs font-medium text-emerald-400 bg-emerald-900/50 px-2 py-0.5 rounded-full">
         تم الرفع ✓
-      </span>
-    );
-  } else if (mandatory) {
-    borderClass = 'border-rose-500/70 shadow-rose-500/10';
-    bgClass     = 'bg-rose-950/20';
-    iconEl      = <AlertCircle size={28} className="text-rose-400" />;
-    statusBadge = (
-      <span className="text-xs font-medium text-rose-400 bg-rose-900/50 px-2 py-0.5 rounded-full">
-        إلزامي
       </span>
     );
   } else {
@@ -101,6 +94,24 @@ export default function UploadCard({ label, mandatory, url, isUploading, onUploa
         aria-label={`رفع ملف ${label}`}
       />
 
+      {/* Remove button — only on dynamic cards (when onRemove is provided) */}
+      {onRemove && (
+        <button
+          type="button"
+          title="حذف هذه البطاقة"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="
+            absolute top-2 left-2 z-10
+            w-6 h-6 flex items-center justify-center rounded-full
+            bg-rose-500/20 border border-rose-500/40 text-rose-400
+            hover:bg-rose-500/40 hover:text-rose-300
+            transition-all duration-200
+          "
+        >
+          <X size={12} />
+        </button>
+      )}
+
       {/* Card header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -130,17 +141,28 @@ export default function UploadCard({ label, mandatory, url, isUploading, onUploa
               <ExternalLink size={12} />
               عرض الملف
             </a>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-              className="
-                text-xs text-slate-400 hover:text-slate-200 transition-colors
-                flex items-center gap-1
-              "
-            >
-              <UploadCloud size={12} />
-              استبدال
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Replace button */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1"
+              >
+                <UploadCloud size={12} />
+                استبدال
+              </button>
+              {/* Delete file from storage */}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                >
+                  <Trash2 size={12} />
+                  حذف
+                </button>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex items-center gap-1.5 text-xs text-slate-400">

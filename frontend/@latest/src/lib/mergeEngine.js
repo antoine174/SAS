@@ -6,18 +6,23 @@
  * ║  Operates on ONE tab at a time (receipts OR documents).          ║
  * ║  Vercel serverless 4.5 MB limit is bypassed entirely because     ║
  * ║  all PDF work happens inside the browser's memory via pdf-lib.   ║
+ * ║                                                                  ║
+ * ║  Merge sequence logic:                                           ║
+ * ║    For each base def in order:                                   ║
+ * ║      1. Include the base slot (if uploaded)                      ║
+ * ║      2. Include all dynamic copies of this type in index order   ║
+ * ║    Missing slots are simply skipped — no validation errors.      ║
  * ╚══════════════════════════════════════════════════════════════════╝
  */
 
 import { PDFDocument } from 'pdf-lib';
 import { supabase, BUCKET } from './supabase';
 import { RECEIPTS, DOCUMENTS } from './fileDefinitions';
-
 import { fetchApi } from './api';
 
 // ─── Tab config map ───────────────────────────────────────────────────────────
 const TAB_CONFIG = {
-  receipts: { defs: RECEIPTS, label: 'ايصالات' },
+  receipts:  { defs: RECEIPTS,  label: 'ايصالات' },
   documents: { defs: DOCUMENTS, label: 'مستندات' },
 };
 
@@ -47,9 +52,9 @@ async function fetchPdfBytes(storagePath) {
  */
 function downloadBlob(pdfBytes, filename) {
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
@@ -57,20 +62,71 @@ function downloadBlob(pdfBytes, filename) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * buildMergeList
+ *
+ * Constructs the ordered list of files to merge by interleaving dynamic copies
+ * immediately after their base type, respecting the canonical sequence.
+ *
+ * Example output for invoice with 2 extras:
+ *   الأول الافراج → ملحق ٤ → الفاتوره(base) → الفاتوره 1 → الفاتوره 2 → البيان → …
+ *
+ * @param {string}   consignmentId  – MongoDB _id (used to build Supabase paths)
+ * @param {object}   tabData        – e.g. consignment.documents
+ * @param {Array}    baseDefs       – e.g. DOCUMENTS
+ * @param {Array}    dynamicFields  – e.g. [{ key:'invoice_1', baseKey:'invoice', label:'الفاتوره 1' }]
+ * @returns {Array<{ key, label, storagePath }>}
+ */
+function buildMergeList(consignmentId, tabData, baseDefs, dynamicFields) {
+  const list = [];
+
+  for (const def of baseDefs) {
+    // 1. Base slot
+    if (tabData[def.key]) {
+      list.push({
+        key:         def.key,
+        label:       def.label,
+        storagePath: `${consignmentId}/${def.key}.pdf`,
+      });
+    }
+
+    // 2. Dynamic copies of this type, sorted by numeric index
+    const copies = (dynamicFields || [])
+      .filter((f) => f.baseKey === def.key)
+      .sort((a, b) => {
+        const idxA = parseInt(a.key.split('_').pop(), 10) || 0;
+        const idxB = parseInt(b.key.split('_').pop(), 10) || 0;
+        return idxA - idxB;
+      });
+
+    for (const copy of copies) {
+      if (tabData[copy.key]) {
+        list.push({
+          key:         copy.key,
+          label:       copy.label,
+          storagePath: `${consignmentId}/${copy.key}.pdf`,
+        });
+      }
+    }
+  }
+
+  return list;
+}
+
 // ─── Exported function ────────────────────────────────────────────────────────
 
 /**
  * mergeAndDownload
  *
- * Validates, fetches, and merges PDFs for the **active tab only**.
+ * Fetches and merges PDFs for the active tab into a single PDF, then downloads it.
+ * All files are optional — missing slots are silently skipped.
  *
  * Steps:
- *   1. Check all mandatory files for `activeTab` are present.
- *   2. Build ordered merge list (skip missing optionals).
- *   3. Fetch each PDF and merge pages into a master PDF via pdf-lib.
- *   4. Trigger a client-side browser download.
- *   5. [withCleanup only] Delete the tab's files from Supabase storage.
- *   6. [withCleanup only] PATCH the backend to null the tab's URL fields in MongoDB.
+ *   1. Build ordered merge list (base order with dynamics interleaved).
+ *   2. Fetch each PDF and merge pages into a master PDF via pdf-lib.
+ *   3. Trigger a client-side browser download.
+ *   4. [withCleanup only] Delete the tab's files from Supabase storage.
+ *   5. [withCleanup only] PATCH the backend to wipe the tab's sub-document in MongoDB.
  *
  * @param {object}   consignment   – full MongoDB document from React state
  * @param {string}   activeTab     – 'receipts' | 'documents'
@@ -78,13 +134,9 @@ function downloadBlob(pdfBytes, filename) {
  * @param {function} onProgress    – callback(message: string) shown in the progress bar
  * @param {function} onError       – callback(message: string) shown as a toast error
  * @param {string}   [password]    – deletion password required when withCleanup = true
+ * @param {Array}    [dynamicFields] – current dynamic field state for this tab
  *
- * @returns {Promise<object|false>}
- *   On success with cleanup: returns { clearedTab, clearedState, fullyDeleted }.
- *     fullyDeleted = true  → entire MongoDB record was hard-deleted (unlock the UI).
- *     fullyDeleted = false → only this tab was cleared (keep locked view, clear URLs).
- *   On success without cleanup: returns true.
- *   On validation failure or wrong password: returns false (or throws with isUnauthorized).
+ * @returns {Promise<object|boolean>}
  */
 export async function mergeAndDownload(
   consignment,
@@ -93,84 +145,60 @@ export async function mergeAndDownload(
   onProgress,
   onError,
   password,
+  dynamicFields = [],
 ) {
   const { _id: id, acid } = consignment;
-  const tabData = consignment[activeTab] ?? {};
-  const currentTabConfig = TAB_CONFIG[activeTab] || {};
+  const tabData           = consignment[activeTab] ?? {};
+  const currentTabConfig  = TAB_CONFIG[activeTab] || {};
   const { defs = [], label = 'ملف' } = currentTabConfig;
 
-  // ── Step 1: Validate mandatory files for this tab ──────────────────────────
-  const missingMandatory = defs
-    .filter((def) => def.mandatory && !tabData[def.key])
-    .map((def) => def.label);
-
-  if (missingMandatory.length > 0) {
-    onError?.(`المستندات الإلزامية التالية مفقودة:\n${missingMandatory.join(' | ')}`);
-    return false;
-  }
-
-  // ── Step 2: Build ordered merge list ──────────────────────────────────────
-  // Strict order = definition array order; missing optionals are simply skipped.
-  const mergeList = defs
-    .filter((def) => !!tabData[def.key])
-    .map((def) => ({
-      url: tabData[def.key],
-      label: def.label,
-      key: def.key,
-      storagePath: `${id}/${def.key}.pdf`,
-    }));
+  // ── Step 1: Build ordered merge list ────────────────────────────────────────
+  const mergeList = buildMergeList(id, tabData, defs, dynamicFields);
 
   if (mergeList.length === 0) {
-    onError?.('لا توجد ملفات لدمجها.');
+    onError?.('لا توجد ملفات مرفوعة لدمجها في هذا التبويب.');
     return false;
   }
 
-  // ── Step 3: Fetch & merge ──────────────────────────────────────────────────
-  // ── Step 3: Fetch & merge PDFs ─────────────────────────────────────────────
+  // ── Step 2: Fetch & merge PDFs ───────────────────────────────────────────────
   onProgress?.(`جارٍ تحميل ${mergeList.length} ملف…`);
 
   const masterPdf = await PDFDocument.create();
 
   for (const item of mergeList) {
     try {
-      // Changed: Now passing item.storagePath instead of item.url
-      const bytes = await fetchPdfBytes(item.storagePath);
+      const bytes  = await fetchPdfBytes(item.storagePath);
       const srcPdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-      const pageIdxs = srcPdf.getPageIndices();
-      const copied = await masterPdf.copyPages(srcPdf, pageIdxs);
+      const copied = await masterPdf.copyPages(srcPdf, srcPdf.getPageIndices());
       copied.forEach((page) => masterPdf.addPage(page));
     } catch (err) {
-      console.error(`⚠️ Could not load PDF for "${item.label}":`, err);
+      // Non-fatal: skip this file and continue merging the rest
+      console.warn(`⚠️ Could not load PDF for "${item.label}" (${item.key}):`, err.message);
     }
   }
+
   onProgress?.('جارٍ إنشاء الملف المدموج…');
   const masterBytes = await masterPdf.save();
 
-  // ── Step 4: Download ───────────────────────────────────────────────────────
-  const date = new Date().toISOString().slice(0, 10);
+  // ── Step 3: Download ─────────────────────────────────────────────────────────
+  const date     = new Date().toISOString().slice(0, 10);
   const filename = `${label}_شحنة_${acid || id}_${date}.pdf`;
   downloadBlob(masterBytes, filename);
   onProgress?.('تم تحميل الملف بنجاح ✅');
 
-  // ── Steps 5 & 6: Cleanup (only when withCleanup = true) ───────────────────
+  // ── Steps 4 & 5: Cleanup (only when withCleanup = true) ─────────────────────
   if (!withCleanup) return true;
 
-  // 5. Delete files from Supabase storage
+  // 4. Delete files from Supabase storage
   try {
     const paths = mergeList.map((item) => item.storagePath);
-    const { error: removeError } = await supabase.storage
-      .from(BUCKET)
-      .remove(paths);
-
-    if (removeError) {
-      console.error('Supabase removal error:', removeError);
-      // Non-fatal: continue to DB cleanup
-    }
+    const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
+    if (removeError) console.warn('Supabase removal error:', removeError.message);
   } catch (err) {
-    console.error('Storage cleanup error:', err);
+    console.warn('Storage cleanup error (non-fatal):', err.message);
   }
 
-  // 6. Null this tab's URL fields in MongoDB (backend may hard-delete if both tabs are empty)
+  // 5. Wipe the tab's sub-document in MongoDB
   let fullyDeleted = false;
   try {
     const data = await fetchApi(`/api/consignments/${id}/cleanup`, {
@@ -180,17 +208,17 @@ export async function mergeAndDownload(
     fullyDeleted = data.deleted === true;
   } catch (err) {
     if (err.message.includes('رمز التأكيد')) {
-      const customErr = new Error(err.message);
+      const customErr    = new Error(err.message);
       customErr.isUnauthorized = true;
       throw customErr;
     }
-    console.error('Backend cleanup error:', err);
+    console.warn('Backend cleanup error (non-fatal):', err.message);
   }
 
   // Build the cleared tab state so the caller can reset React state immediately
-  // without needing a round-trip GET to the server.
   const clearedTabState = {};
   defs.forEach((def) => { clearedTabState[def.key] = null; });
+  dynamicFields.forEach((f) => { clearedTabState[f.key] = null; });
 
   return { clearedTab: activeTab, clearedState: clearedTabState, fullyDeleted };
 }

@@ -1,4 +1,19 @@
-import { useState, useCallback } from 'react';
+// src/components/ConsignmentDetailModal.jsx
+/**
+ * ConsignmentDetailModal
+ *
+ * Full detail view for a single consignment record.
+ * Features:
+ *  - Edit flat metadata fields (companyName, acid, etc.)
+ *  - Two upload tabs: "مستندات" (documents) and "ايصالات" (receipts)
+ *  - Dynamic "Add More" UI: dropdown + button adds extra copies of any type
+ *  - Dynamic cards have a delete (×) button; base cards do not
+ *  - PDF merge respects sequence: base → dynamic copies interleaved after each base
+ *  - All files are optional — merge skips empty slots without errors
+ *  - Re-opening a saved consignment restores dynamic cards from DB state
+ */
+
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import {
   X,
@@ -9,6 +24,7 @@ import {
   CheckCircle2,
   Save,
   Loader2,
+  PlusCircle,
 } from 'lucide-react';
 import UploadCard from './UploadCard';
 import ProgressBar from './ProgressBar';
@@ -17,67 +33,142 @@ import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload } from '../lib/mergeEngine';
 import { fetchApi } from '../lib/api';
 
+// ─── Tab configuration ────────────────────────────────────────────────────────
+
 const TAB_CONFIG = {
-  receipts: { defs: RECEIPTS, label: 'ايصالات', icon: Receipt },
-  documents: { defs: DOCUMENTS, label: 'مستندات', icon: FolderOpen },
+  documents: { defs: DOCUMENTS, label: 'المستندات', icon: FolderOpen },
+  receipts:  { defs: RECEIPTS,  label: 'الايصالات', icon: Receipt    },
 };
 
 const TABS = [
-  { id: 'receipts', ...TAB_CONFIG.receipts },
   { id: 'documents', ...TAB_CONFIG.documents },
+  { id: 'receipts',  ...TAB_CONFIG.receipts  },
 ];
 
-const COMPANIES = ['مصانع الترياق', 'شركة الزامل'];
-const COMPANY_COLOR = {
-  'مصانع الترياق': 'emerald',
-  'شركة الزامل': 'sky',
-};
+// Build a lookup map: baseKey → label  (used to label dynamic copies)
+const BASE_KEY_LABEL = {};
+[...DOCUMENTS, ...RECEIPTS].forEach(({ key, label }) => { BASE_KEY_LABEL[key] = label; });
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const COMPANIES     = ['مصانع الترياق', 'شركة الزامل'];
+const COMPANY_COLOR = { 'مصانع الترياق': 'emerald', 'شركة الزامل': 'sky' };
+
+/**
+ * Given the raw tabData from the DB, reconstruct any dynamic fields
+ * (keys matching pattern `{baseKey}_{N}`) back into the dynamicFields array.
+ *
+ * @param {'documents'|'receipts'} tab
+ * @param {object} tabData  – e.g. consignment.documents
+ * @returns {Array<{ key, baseKey, label }>}
+ */
+function hydrateDynamicFields(tab, tabData) {
+  if (!tabData || typeof tabData !== 'object') return [];
+  const baseDefs  = TAB_CONFIG[tab].defs;
+  const baseKeys  = new Set(baseDefs.map((d) => d.key));
+  const dynamic   = [];
+
+  for (const storedKey of Object.keys(tabData)) {
+    // Match pattern: someBaseKey_1, someBaseKey_2, etc.
+    const match = storedKey.match(/^(.+)_(\d+)$/);
+    if (!match) continue;
+
+    const baseKey = match[1];
+    const index   = parseInt(match[2], 10);
+
+    if (!baseKeys.has(baseKey)) continue; // unknown base key — skip
+
+    dynamic.push({
+      key:     storedKey,
+      baseKey,
+      label:   `${BASE_KEY_LABEL[baseKey] || baseKey} ${index}`,
+    });
+  }
+
+  // Sort by base key order then by index
+  const baseOrder = baseDefs.map((d) => d.key);
+  dynamic.sort((a, b) => {
+    const orderDiff = baseOrder.indexOf(a.baseKey) - baseOrder.indexOf(b.baseKey);
+    if (orderDiff !== 0) return orderDiff;
+    const idxA = parseInt(a.key.split('_').pop(), 10) || 0;
+    const idxB = parseInt(b.key.split('_').pop(), 10) || 0;
+    return idxA - idxB;
+  });
+
+  return dynamic;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDeleteModal, onUpdate }) {
   const [activeTab, setActiveTab] = useState('documents');
+
+  // Flat metadata form state
   const [form, setForm] = useState({
-    companyName: detailDoc.companyName || COMPANIES[0],
-    acid: detailDoc.acid || '',
+    companyName:           detailDoc.companyName           || COMPANIES[0],
+    acid:                  detailDoc.acid                  || '',
     invoiceSequenceNumber: detailDoc.invoiceSequenceNumber || '',
-    consignmentNumber: detailDoc.consignmentNumber || '',
-    itemName: detailDoc.itemName || '',
-    count: detailDoc.count || '',
-    supplierName: detailDoc.supplierName || '',
+    consignmentNumber:     detailDoc.consignmentNumber     || '',
+    itemName:              detailDoc.itemName              || '',
+    count:                 detailDoc.count                 || '',
+    supplierName:          detailDoc.supplierName          || '',
   });
-  
-  const [isSaving, setIsSaving] = useState(false);
+
+  const [isSaving,      setIsSaving]      = useState(false);
   const [uploadingKeys, setUploadingKeys] = useState(new Set());
-  const [merging, setMerging] = useState(false); // false | 'keep' | 'delete'
-  const [mergeMessage, setMergeMessage] = useState('');
-  
-  // Keep local document state so file uploads reflect immediately
+  const [merging,       setMerging]       = useState(false); // false | 'keep' | 'delete'
+  const [mergeMessage,  setMergeMessage]  = useState('');
+
+  // Local copy of the full consignment document (updated on every upload/delete)
   const [localDoc, setLocalDoc] = useState(detailDoc);
 
+  /**
+   * Dynamic fields state — shape per tab:
+   *   { documents: [{ key, baseKey, label }, …], receipts: […] }
+   *
+   * Hydrated from localDoc on mount so re-opening a saved consignment
+   * restores any previously added dynamic cards.
+   */
+  const [dynamicFields, setDynamicFields] = useState(() => ({
+    documents: hydrateDynamicFields('documents', detailDoc.documents),
+    receipts:  hydrateDynamicFields('receipts',  detailDoc.receipts),
+  }));
+
+  // Dropdown selection for the "Add More" toolbar (one per tab)
+  const [addDropdown, setAddDropdown] = useState({ documents: '', receipts: '' });
+
+  // ── Sync dynamic fields when localDoc changes (e.g. after a delete) ──────────
+  useEffect(() => {
+    setDynamicFields({
+      documents: hydrateDynamicFields('documents', localDoc.documents),
+      receipts:  hydrateDynamicFields('receipts',  localDoc.receipts),
+    });
+  }, [localDoc]);
+
+  // ── Form change handler ───────────────────────────────────────────────────────
   const handleFieldChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // ── Save metadata ─────────────────────────────────────────────────────────────
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
-      // In a real app we'd have a PUT endpoint, but we can just use the generic update or fallback to just closing if we don't have one.
-      // Wait, let's check if the backend has PUT. The backend only has POST, GET, PATCH /file, PATCH /cleanup, DELETE.
-      // We don't have a generic PUT /:id yet. Let's add it to the backend or use a workaround.
-      // For now, I will use fetchApi to PUT or PATCH, assuming I'll add the route to backend next.
       const res = await fetchApi(`/api/consignments/${localDoc._id}`, {
         method: 'PUT',
-        body: JSON.stringify(form)
+        body:   JSON.stringify(form),
       });
       setLocalDoc(res);
       toast.success('تم الحفظ بنجاح');
       onUpdate();
-    } catch (err) {
+    } catch {
       toast.error('خطأ في الحفظ');
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ── Upload a PDF file ─────────────────────────────────────────────────────────
   const handleUpload = useCallback(async (tab, key, file) => {
     if (!localDoc) return;
     if (file.type !== 'application/pdf') {
@@ -90,13 +181,12 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('tab', tab);
-      formData.append('key', key);
+      formData.append('tab',  tab);
+      formData.append('key',  key);
 
-      // DO NOT add headers! The browser needs to add the 'multipart/form-data' boundary automatically.
       const data = await fetchApi(`/api/consignments/${localDoc._id}/upload`, {
         method: 'POST',
-        body: formData, 
+        body:   formData,
       });
 
       setLocalDoc(data);
@@ -112,6 +202,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   }, [localDoc]);
 
+  // ── Delete a file from storage + DB ──────────────────────────────────────────
   const handleDeleteFile = useCallback(async (tab, key) => {
     if (!localDoc) return;
     const uploadKey = `${tab}.${key}`;
@@ -124,7 +215,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
       const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
         method: 'PATCH',
-        body: JSON.stringify({ tab, key, url: null }),
+        body:   JSON.stringify({ tab, key, url: null }),
       });
 
       setLocalDoc(data);
@@ -140,20 +231,62 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   }, [localDoc]);
 
+  // ── Add a dynamic copy of a document type ────────────────────────────────────
+  const handleAddField = (tab) => {
+    const baseKey = addDropdown[tab];
+    if (!baseKey) {
+      toast.warning('الرجاء اختيار نوع المستند أولاً');
+      return;
+    }
+
+    // Find the next available index for this baseKey in this tab
+    const existing = dynamicFields[tab].filter((f) => f.baseKey === baseKey);
+    const nextIdx  = existing.length > 0
+      ? Math.max(...existing.map((f) => parseInt(f.key.split('_').pop(), 10) || 0)) + 1
+      : 1;
+
+    const newKey   = `${baseKey}_${nextIdx}`;
+    const newLabel = `${BASE_KEY_LABEL[baseKey] || baseKey} ${nextIdx}`;
+
+    // Prevent duplicates (shouldn't happen, but guard anyway)
+    if (dynamicFields[tab].some((f) => f.key === newKey)) return;
+
+    setDynamicFields((prev) => ({
+      ...prev,
+      [tab]: [...prev[tab], { key: newKey, baseKey, label: newLabel }],
+    }));
+  };
+
+  // ── Remove a dynamic card (delete file if uploaded, remove from state) ────────
+  const handleRemoveDynamicField = useCallback(async (tab, dynField) => {
+    // If a file was uploaded for this dynamic slot, delete it first
+    const tabData = localDoc[tab] || {};
+    if (tabData[dynField.key]) {
+      await handleDeleteFile(tab, dynField.key);
+    }
+
+    // Remove from local dynamic state
+    setDynamicFields((prev) => ({
+      ...prev,
+      [tab]: prev[tab].filter((f) => f.key !== dynField.key),
+    }));
+  }, [localDoc, handleDeleteFile]);
+
+  // ── Merge & download ──────────────────────────────────────────────────────────
   const handleMerge = async (deleteAfter) => {
     setMerging(deleteAfter ? 'delete' : 'keep');
     setMergeMessage('جاري سحب الملفات ودمجها...');
     try {
-      // Correct signature: (consignment, activeTab, withCleanup, onProgress, onError, password)
-      // We pass withCleanup=false because the parent DeleteModal handles the actual cleanup
       const success = await mergeAndDownload(
         localDoc,
         activeTab,
         false,
         (msg) => setMergeMessage(msg),
-        (errMsg) => toast.error(errMsg)
+        (errMsg) => toast.error(errMsg),
+        undefined,
+        dynamicFields[activeTab], // pass dynamic fields for correct sequencing
       );
-      
+
       if (success) {
         toast.success(
           <div className="flex items-center gap-2">
@@ -162,7 +295,6 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
           </div>
         );
         if (deleteAfter) {
-          // Ask parent to open delete modal so the user provides the password.
           closeDetail();
           openDeleteModal(localDoc._id, localDoc.acid);
         }
@@ -175,11 +307,13 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   };
 
-  const currentTabConfig = TAB_CONFIG[activeTab] || { defs: [] };
-  const currentFields = currentTabConfig.defs;
-  const tabData = localDoc[activeTab] || {};
-  const accent = COMPANY_COLOR[localDoc.companyName] || 'slate';
+  // ── Derived values ────────────────────────────────────────────────────────────
+  const currentDefs       = TAB_CONFIG[activeTab].defs;
+  const tabData           = localDoc[activeTab] || {};
+  const accent            = COMPANY_COLOR[localDoc.companyName] || 'slate';
+  const activeDynFields   = dynamicFields[activeTab] || [];
 
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
@@ -187,12 +321,12 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     >
       <div
         dir="rtl"
-        className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col max-h-[90vh]"
+        className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col max-h-[92vh]"
       >
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className={`px-6 py-4 bg-${accent}-500/10 border-b border-slate-700 flex items-center justify-between flex-shrink-0`}>
           <div className="flex items-center gap-3">
-             <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-${accent}-500/20 text-${accent}-300 border border-${accent}-500/30`}>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-${accent}-500/20 text-${accent}-300 border border-${accent}-500/30`}>
               {localDoc.companyName}
             </span>
             <span className="text-slate-300 font-mono text-sm">{localDoc.acid}</span>
@@ -206,13 +340,14 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
           </button>
         </div>
 
-        {/* Scrollable Body */}
+        {/* ── Scrollable body ──────────────────────────────────────────────── */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          
-          {/* Section 1: Edit Fields */}
+
+          {/* Section 1: Edit metadata fields */}
           <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-slate-300 mb-4">بيانات الشحنة</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+
               <div>
                 <label className="block text-xs text-slate-400 mb-1">اسم الشركة</label>
                 <select
@@ -220,67 +355,30 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                   onChange={(e) => handleFieldChange('companyName', e.target.value)}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
                 >
-                  {COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">ACID</label>
-                <input
-                  type="text"
-                  value={form.acid}
-                  onChange={(e) => handleFieldChange('acid', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 font-mono text-left transition-colors"
-                  dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">رقم تسلسل الفاتورة</label>
-                <input
-                  type="text"
-                  value={form.invoiceSequenceNumber}
-                  onChange={(e) => handleFieldChange('invoiceSequenceNumber', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 font-mono text-left transition-colors"
-                  dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">رقم البوليصة</label>
-                <input
-                  type="text"
-                  value={form.consignmentNumber}
-                  onChange={(e) => handleFieldChange('consignmentNumber', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 font-mono text-left transition-colors"
-                  dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">اسم الصنف</label>
-                <input
-                  type="text"
-                  value={form.itemName}
-                  onChange={(e) => handleFieldChange('itemName', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">العدد</label>
-                <input
-                  type="text"
-                  value={form.count}
-                  onChange={(e) => handleFieldChange('count', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 font-mono text-left transition-colors"
-                  dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">اسم المورد</label>
-                <input
-                  type="text"
-                  value={form.supplierName}
-                  onChange={(e) => handleFieldChange('supplierName', e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
-                />
-              </div>
+
+              {[
+                { field: 'acid',                  label: 'ACID',                 mono: true  },
+                { field: 'invoiceSequenceNumber', label: 'رقم تسلسل الفاتورة',  mono: true  },
+                { field: 'consignmentNumber',     label: 'رقم البوليصة',         mono: true  },
+                { field: 'itemName',              label: 'اسم الصنف',            mono: false },
+                { field: 'count',                 label: 'العدد',                mono: true  },
+                { field: 'supplierName',          label: 'اسم المورد',           mono: false },
+              ].map(({ field, label, mono }) => (
+                <div key={field}>
+                  <label className="block text-xs text-slate-400 mb-1">{label}</label>
+                  <input
+                    type="text"
+                    value={form[field]}
+                    onChange={(e) => handleFieldChange(field, e.target.value)}
+                    dir={mono ? 'ltr' : 'rtl'}
+                    className={`w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors ${mono ? 'font-mono text-left' : ''}`}
+                  />
+                </div>
+              ))}
+
               <div className="flex items-end">
                 <button
                   onClick={handleSaveChanges}
@@ -291,12 +389,14 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                   حفظ التعديلات
                 </button>
               </div>
+
             </div>
           </div>
 
-          {/* Section 2: Tabbed Uploads */}
+          {/* Section 2: Tabbed upload grid */}
           <div className="border border-slate-700 rounded-2xl overflow-hidden bg-slate-900 shadow-xl">
-            {/* Tabs */}
+
+            {/* Tab switcher */}
             <div className="flex border-b border-slate-800">
               {TABS.map((tab) => (
                 <button
@@ -316,31 +416,87 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               ))}
             </div>
 
-            {/* Grid */}
-            <div className="p-4 sm:p-6 bg-slate-950/30">
+            {/* Upload grid */}
+            <div className="p-4 sm:p-6 bg-slate-950/30 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {currentFields.map(({ key, label, mandatory }) => {
-                  const url = tabData[key];
-                  const uploadKey = `${activeTab}.${key}`;
-                  const isUploading = uploadingKeys.has(uploadKey);
+
+                {currentDefs.map((def) => {
+                  const baseUploadKey = `${activeTab}.${def.key}`;
+                  const isBaseUploading = uploadingKeys.has(baseUploadKey);
+
+                  // Collect dynamic copies for this base type
+                  const copies = activeDynFields.filter((f) => f.baseKey === def.key);
 
                   return (
-                    <UploadCard
-                      key={key}
-                      label={label}
-                      url={url}
-                      mandatory={mandatory}
-                      isUploading={isUploading}
-                      onUpload={(file) => handleUpload(activeTab, key, file)}
-                      onDelete={() => handleDeleteFile(activeTab, key)}
-                    />
+                    <div key={def.key} className="contents">
+                      {/* Base card */}
+                      <UploadCard
+                        label={def.label}
+                        url={tabData[def.key]}
+                        isUploading={isBaseUploading}
+                        onUpload={(file) => handleUpload(activeTab, def.key, file)}
+                        onDelete={() => handleDeleteFile(activeTab, def.key)}
+                        // No onRemove → base cards cannot be deleted
+                      />
+
+                      {/* Dynamic copy cards for this type */}
+                      {copies.map((dynField) => {
+                        const dynUploadKey   = `${activeTab}.${dynField.key}`;
+                        const isDynUploading = uploadingKeys.has(dynUploadKey);
+                        return (
+                          <UploadCard
+                            key={dynField.key}
+                            label={dynField.label}
+                            url={tabData[dynField.key]}
+                            isUploading={isDynUploading}
+                            onUpload={(file) => handleUpload(activeTab, dynField.key, file)}
+                            onDelete={() => handleDeleteFile(activeTab, dynField.key)}
+                            onRemove={() => handleRemoveDynamicField(activeTab, dynField)}
+                          />
+                        );
+                      })}
+                    </div>
                   );
                 })}
+
+              </div>
+
+              {/* ── "Add More" toolbar ───────────────────────────────────── */}
+              <div className="flex items-center gap-3 pt-4 border-t border-slate-800/70">
+                <div className="flex-1">
+                  <label className="block text-xs text-slate-500 mb-1.5">إضافة نسخة إضافية من</label>
+                  <select
+                    value={addDropdown[activeTab]}
+                    onChange={(e) =>
+                      setAddDropdown((prev) => ({ ...prev, [activeTab]: e.target.value }))
+                    }
+                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="">— اختر النوع —</option>
+                    {currentDefs.map((def) => (
+                      <option key={def.key} value={def.key}>{def.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleAddField(activeTab)}
+                  className="
+                    flex-shrink-0 flex items-center gap-2 self-end
+                    px-4 py-2.5 rounded-xl text-sm font-semibold
+                    bg-emerald-600/20 border border-emerald-500/40 text-emerald-400
+                    hover:bg-emerald-600/40 hover:border-emerald-500/70 hover:text-emerald-300
+                    transition-all duration-200
+                  "
+                >
+                  <PlusCircle size={16} />
+                  إضافة
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Merge Controls */}
+          {/* Section 3: Merge controls */}
           {merging && <ProgressBar message={mergeMessage} />}
           <div className="flex flex-col sm:flex-row gap-3">
             <button

@@ -231,6 +231,13 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
 
 /**
  * PATCH /api/consignments/:id/cleanup
+ *
+ * Wipes all files for a given tab (documents or receipts) by replacing the
+ * entire sub-document with an empty object. This works for both static and
+ * any number of dynamic keys (e.g. invoice_1, invoice_2 …) without
+ * needing to enumerate them.
+ *
+ * After clearing, if BOTH sub-documents are empty the record is hard-deleted.
  */
 app.patch('/api/consignments/:id/cleanup', async (req, res) => {
   try {
@@ -244,32 +251,17 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
     if (!password || password !== process.env.DELETE_PASSWORD)
       return res.status(401).json({ message: 'رمز التأكيد غير صحيح' });
 
-    const resetReceipts = {
-      'receipts.currentAccount': null, 'receipts.cps': null,
-      'receipts.freightInvoice': null, 'receipts.freightReceipt': null,
-      'receipts.unloadingReceipt': null, 'receipts.unloadingInvoice': null,
-      'receipts.guardReceipt': null, 'receipts.guardInvoice': null,
-      'receipts.fineReceipt': null, 'receipts.fineInvoice': null,
-      'receipts.weightReceipt': null, 'receipts.analysisReceipt': null,
-    };
-    const resetDocuments = {
-      'documents.firstRelease': null, 'documents.appendix4': null,
-      'documents.invoice': null, 'documents.declaration': null,
-      'documents.insurance': null, 'documents.houseBillOfLading': null,
-      'documents.masterBillOfLading': null, 'documents.permission': null,
-      'documents.euro1': null, 'documents.analysis': null,
-    };
-
-    const fields = tab === 'receipts' ? resetReceipts : resetDocuments;
+    // Wipe the entire sub-document atomically — handles static AND dynamic keys
     const doc = await Consignment.findByIdAndUpdate(
       req.params.id,
-      { $set: fields },
+      { $set: { [tab]: {} } },
       { new: true },
     );
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    const receiptsEmpty = Object.values(doc.receipts || {}).every((v) => !v);
-    const documentsEmpty = Object.values(doc.documents || {}).every((v) => !v);
+    // Hard-delete if both tabs are now empty
+    const receiptsEmpty  = Object.keys(doc.receipts  || {}).length === 0 || Object.values(doc.receipts  || {}).every((v) => !v);
+    const documentsEmpty = Object.keys(doc.documents || {}).length === 0 || Object.values(doc.documents || {}).every((v) => !v);
 
     if (receiptsEmpty && documentsEmpty) {
       await Consignment.findByIdAndDelete(req.params.id);

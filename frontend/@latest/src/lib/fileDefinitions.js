@@ -3,37 +3,47 @@
  * Central source of truth for all document/receipt fields.
  *
  * Each entry:
- *   key      – matches the Mongoose schema field (English, camelCase)
- *   label    – Arabic UI label shown to the user
- *   mandatory – if true, merge is blocked when missing
+ *   key   – matches the MongoDB field key (English, camelCase)
+ *   label – Arabic UI label shown to the user
  *
  * ORDER IN EACH ARRAY = strict PDF merge order.
+ * All fields are optional — the merge engine skips missing files gracefully.
  */
 
-export const RECEIPTS = [
-  { key: 'currentAccount',    label: 'حساب جاري',       mandatory: true  },
-  { key: 'cps',               label: 'CPS',              mandatory: true  },
-  { key: 'freightInvoice',    label: 'فاتورة نولون',     mandatory: true  },
-  { key: 'freightReceipt',    label: 'ايصال نولون',      mandatory: true  },
-  { key: 'unloadingReceipt',  label: 'ايصال تفريغ',      mandatory: true  },
-  { key: 'unloadingInvoice',  label: 'فاتورة تفريغ',     mandatory: true  },
-  { key: 'guardReceipt',      label: 'ايصال الحراسة',    mandatory: false },
-  { key: 'guardInvoice',      label: 'فاتورة حراسة',     mandatory: false },
-  { key: 'fineReceipt',       label: 'ايصال غرامة',      mandatory: false },
-  { key: 'fineInvoice',       label: 'فاتورة غرامة',     mandatory: false },
-  { key: 'weightReceipt',     label: 'ايصال وزن',        mandatory: true  },
-  { key: 'analysisReceipt',   label: 'ايصال تحليل',      mandatory: false },
+export const DOCUMENTS = [
+  { key: 'firstRelease', label: 'الأول الافراج' },
+  { key: 'appendix4', label: 'ملحق ٤' },
+  { key: 'invoice', label: 'الفاتوره' },
+  { key: 'declaration', label: 'البيان' },
+  { key: 'euro1', label: 'يوروا ١' },
+  { key: 'originCertificate', label: 'شهاده المنشأ' },
+  { key: 'insurance', label: 'التامين' },
+  { key: 'houseBillOfLading', label: 'البوليصه هاوس' },
+  { key: 'masterBillOfLading', label: 'البوليصه ماستر' },
+  { key: 'permission', label: 'الاذن' },
+  { key: 'analysis', label: 'تحليل' },
+  { key: 'generalSecurity', label: 'امن عام' },
 ];
 
-export const DOCUMENTS = [
-  { key: 'firstRelease',        label: 'الأول الافراج',    mandatory: true  },
-  { key: 'appendix4',           label: 'ملحق ٤',           mandatory: true  },
-  { key: 'invoice',             label: 'الفاتورة',          mandatory: true  },
-  { key: 'declaration',         label: 'البيان',            mandatory: true  },
-  { key: 'insurance',           label: 'التأمين',           mandatory: true  },
-  { key: 'houseBillOfLading',   label: 'البوليصة هاوس',    mandatory: false },
-  { key: 'masterBillOfLading',  label: 'البوليصة ماستر',   mandatory: true  },
-  { key: 'permission',          label: 'الاذن',             mandatory: true  },
-  { key: 'euro1',               label: 'يوروا ١',           mandatory: false },
-  { key: 'analysis',            label: 'تحليل',             mandatory: false },
+export const RECEIPTS = [
+  { key: 'currentAccount', label: 'حساب جاري' },
+  { key: 'cps', label: 'CPS' },
+  { key: 'assignmentReceipt', label: 'ايصال تنازل' },
+  { key: 'assignmentInvoice', label: 'فاتوره تنازل' },
+  { key: 'freightInvoice', label: 'فاتوره نولون' },
+  { key: 'freightReceipt', label: 'ايصال نولون' },
+  { key: 'unloadingReceipt', label: 'ايصال تفريغ' },
+  { key: 'unloadingInvoice', label: 'فاتوره تفريغ' },
+  { key: 'guardReceipt', label: 'ايصال الحراسه' },
+  { key: 'guardInvoice', label: 'فاتوره حراسه' },
+  { key: 'fineReceipt', label: 'ايصال غرامه' },
+  { key: 'fineInvoice', label: 'فاتوره غرامه' },
+  { key: 'weightReceipt', label: 'ايصال وزن' },
+  { key: 'analysisReceipt', label: 'ايصال تحليل' },
+  { key: 'portAuthorityReceipt', label: 'ايصال هيئه ميناء' },
+  { key: 'overweightReceipt', label: 'ايصال زياده وزن' },
+  { key: 'roadReceipt', label: 'ايصال طريق' },
+  { key: 'agingReceipt', label: 'ايصال تعتيق' },
+  { key: 'carEntryReceipt', label: 'ايصال دخول سيارة' },
+  { key: 'carWaitingReceipt', label: 'ايصال انتظار سيارة' },
 ];
