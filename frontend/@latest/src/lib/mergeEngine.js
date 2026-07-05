@@ -180,9 +180,23 @@ export async function mergeAndDownload(
   onProgress?.('جارٍ إنشاء الملف المدموج…');
   const masterBytes = await masterPdf.save();
 
-  // ── Step 3: Download ─────────────────────────────────────────────────────────
-  const date     = new Date().toISOString().slice(0, 10);
-  const filename = `${label}_شحنة_${acid || id}_${date}.pdf`;
+  // ── Build filename per company naming convention ──────────────────────────
+  // Format: {fileNumber}-{year} {count} {supplierName} {certificateNumber} {itemName} - {arrivalPort} {tabName}.pdf
+  const _fileNum  = consignment.fileNumber
+    ? String(consignment.fileNumber).padStart(4, '0')
+    : 'رقم الملف';
+  const _year     = consignment.createdAt
+    ? new Date(consignment.createdAt).getFullYear()
+    : new Date().getFullYear();
+  const _count    = consignment.count             || 'العدد';
+  const _supplier = consignment.supplierName      || 'اسم المورد';
+  const _certNum  = consignment.certificateNumber || 'رقم الشهاده';
+  const _item     = consignment.itemName          || 'اسم الصنف';
+  const _port     = consignment.arrivalPort       || 'ميناء الوصول';
+  const _tabName  = activeTab === 'documents'     ? 'مستندات' : 'ايصالات';
+
+  const filename = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_item} - ${_port} ${_tabName}.pdf`;
+
   downloadBlob(masterBytes, filename);
   onProgress?.('تم تحميل الملف بنجاح ✅');
 
