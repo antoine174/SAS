@@ -19,6 +19,7 @@ export const DOCUMENTS = [
   { key: 'originCertificate', label: 'شهاده المنشأ' },
   { key: 'insurance', label: 'التامين' },
   { key: 'houseBillOfLading', label: 'البوليصه هاوس' },
+  { key: 'surrenderCopy', label: 'صورة تنازل' },
   { key: 'masterBillOfLading', label: 'البوليصه ماستر' },
   { key: 'permission', label: 'الاذن' },
   { key: 'analysis', label: 'تحليل' },
