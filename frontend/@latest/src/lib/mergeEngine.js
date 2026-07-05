@@ -195,7 +195,7 @@ export async function mergeAndDownload(
   const _port     = consignment.arrivalPort       || 'ميناء الوصول';
   const _tabName  = activeTab === 'documents'     ? 'مستندات' : 'ايصالات';
 
-  const filename = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_item} - ${_port} ${_tabName}.pdf`;
+  const filename = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_port} - ${_item} ${_tabName}.pdf`;
 
   downloadBlob(masterBytes, filename);
   onProgress?.('تم تحميل الملف بنجاح ✅');
