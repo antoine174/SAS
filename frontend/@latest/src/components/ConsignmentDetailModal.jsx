@@ -6,14 +6,19 @@
  * Features:
  *  - Edit flat metadata fields (companyName, acid, etc.)
  *  - Two upload tabs: "مستندات" (documents) and "ايصالات" (receipts)
- *  - Dynamic "Add More" UI: dropdown + button adds extra copies of any type
+ *  - Dynamic "Add More" UI: dropdown + quantity input + button
  *  - Dynamic cards have a delete (×) button; base cards do not
  *  - PDF merge respects sequence: base → dynamic copies interleaved after each base
  *  - All files are optional — merge skips empty slots without errors
  *  - Re-opening a saved consignment restores dynamic cards from DB state
+ *
+ * Bug fix (dynamic card state):
+ *  - dynamicFields is NEVER overwritten by a DB response.
+ *  - On localDoc updates, we MERGE new DB-discovered keys into existing state
+ *    so empty local-only cards survive any upload response.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import {
   X,
@@ -25,6 +30,7 @@ import {
   Save,
   Loader2,
   PlusCircle,
+  Hash,
 } from 'lucide-react';
 import UploadCard from './UploadCard';
 import ProgressBar from './ProgressBar';
@@ -55,29 +61,25 @@ const COMPANIES     = ['مصانع الترياق', 'شركة الزامل'];
 const COMPANY_COLOR = { 'مصانع الترياق': 'emerald', 'شركة الزامل': 'sky' };
 
 /**
- * Given the raw tabData from the DB, reconstruct any dynamic fields
- * (keys matching pattern `{baseKey}_{N}`) back into the dynamicFields array.
+ * Given the raw tabData from the DB, extract dynamic fields
+ * (keys matching pattern `{baseKey}_{N}`) as an array.
  *
  * @param {'documents'|'receipts'} tab
  * @param {object} tabData  – e.g. consignment.documents
  * @returns {Array<{ key, baseKey, label }>}
  */
-function hydrateDynamicFields(tab, tabData) {
+function extractDbDynamicFields(tab, tabData) {
   if (!tabData || typeof tabData !== 'object') return [];
-  const baseDefs  = TAB_CONFIG[tab].defs;
-  const baseKeys  = new Set(baseDefs.map((d) => d.key));
-  const dynamic   = [];
+  const baseDefs = TAB_CONFIG[tab].defs;
+  const baseKeys = new Set(baseDefs.map((d) => d.key));
+  const dynamic  = [];
 
   for (const storedKey of Object.keys(tabData)) {
-    // Match pattern: someBaseKey_1, someBaseKey_2, etc.
     const match = storedKey.match(/^(.+)_(\d+)$/);
     if (!match) continue;
-
     const baseKey = match[1];
     const index   = parseInt(match[2], 10);
-
-    if (!baseKeys.has(baseKey)) continue; // unknown base key — skip
-
+    if (!baseKeys.has(baseKey)) continue;
     dynamic.push({
       key:     storedKey,
       baseKey,
@@ -85,17 +87,37 @@ function hydrateDynamicFields(tab, tabData) {
     });
   }
 
-  // Sort by base key order then by index
+  // Sort by base key sequence order, then by numeric index
   const baseOrder = baseDefs.map((d) => d.key);
   dynamic.sort((a, b) => {
     const orderDiff = baseOrder.indexOf(a.baseKey) - baseOrder.indexOf(b.baseKey);
     if (orderDiff !== 0) return orderDiff;
-    const idxA = parseInt(a.key.split('_').pop(), 10) || 0;
-    const idxB = parseInt(b.key.split('_').pop(), 10) || 0;
-    return idxA - idxB;
+    return (parseInt(a.key.split('_').pop(), 10) || 0)
+         - (parseInt(b.key.split('_').pop(), 10) || 0);
   });
 
   return dynamic;
+}
+
+/**
+ * mergeDynamicFields
+ *
+ * NON-DESTRUCTIVE merge: takes the current local dynamicFields array and
+ * DB-sourced dynamic fields, then returns a combined array that:
+ *   - Keeps ALL existing local entries (including empty/unsaved ones)
+ *   - Appends any DB entries whose key isn't already tracked locally
+ *
+ * This ensures that an upload response updating localDoc NEVER wipes
+ * empty local-only dynamic cards from the UI.
+ *
+ * @param {Array} existing  – current dynamicFields[tab]
+ * @param {Array} fromDb    – result of extractDbDynamicFields(tab, tabData)
+ * @returns {Array}
+ */
+function mergeDynamicFields(existing, fromDb) {
+  const existingKeys = new Set(existing.map((f) => f.key));
+  const toAdd = fromDb.filter((f) => !existingKeys.has(f.key));
+  return [...existing, ...toAdd];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -126,23 +148,35 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
    * Dynamic fields state — shape per tab:
    *   { documents: [{ key, baseKey, label }, …], receipts: […] }
    *
-   * Hydrated from localDoc on mount so re-opening a saved consignment
-   * restores any previously added dynamic cards.
+   * Initialised once on mount from detailDoc so re-opening a saved consignment
+   * restores previously-uploaded dynamic cards.
+   *
+   * IMPORTANT: this state is NEVER replaced wholesale on localDoc updates.
+   * DB responses are merged into it (additive-only) via the useEffect below,
+   * so empty local-only cards survive any upload/delete server round-trip.
    */
   const [dynamicFields, setDynamicFields] = useState(() => ({
-    documents: hydrateDynamicFields('documents', detailDoc.documents),
-    receipts:  hydrateDynamicFields('receipts',  detailDoc.receipts),
+    documents: extractDbDynamicFields('documents', detailDoc.documents),
+    receipts:  extractDbDynamicFields('receipts',  detailDoc.receipts),
   }));
 
-  // Dropdown selection for the "Add More" toolbar (one per tab)
+  // Dropdown + quantity for the "Add More" toolbar (one set per tab)
   const [addDropdown, setAddDropdown] = useState({ documents: '', receipts: '' });
+  const [addQty,      setAddQty]      = useState({ documents: 1,  receipts: 1  });
 
-  // ── Sync dynamic fields when localDoc changes (e.g. after a delete) ──────────
+  // ── ADDITIVE sync: merge DB-discovered keys into local state on every update ──
+  // We NEVER call setDynamicFields with a fresh array — only append new entries.
   useEffect(() => {
-    setDynamicFields({
-      documents: hydrateDynamicFields('documents', localDoc.documents),
-      receipts:  hydrateDynamicFields('receipts',  localDoc.receipts),
-    });
+    setDynamicFields((prev) => ({
+      documents: mergeDynamicFields(
+        prev.documents,
+        extractDbDynamicFields('documents', localDoc.documents),
+      ),
+      receipts: mergeDynamicFields(
+        prev.receipts,
+        extractDbDynamicFields('receipts', localDoc.receipts),
+      ),
+    }));
   }, [localDoc]);
 
   // ── Form change handler ───────────────────────────────────────────────────────
@@ -231,30 +265,57 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   }, [localDoc]);
 
-  // ── Add a dynamic copy of a document type ────────────────────────────────────
+  // ── Add one or more dynamic copies of a document type ───────────────────────
   const handleAddField = (tab) => {
-    const baseKey = addDropdown[tab];
+    const baseKey  = addDropdown[tab];
+    const quantity = Math.max(1, Math.min(20, parseInt(addQty[tab], 10) || 1));
+
     if (!baseKey) {
       toast.warning('الرجاء اختيار نوع المستند أولاً');
       return;
     }
 
-    // Find the next available index for this baseKey in this tab
-    const existing = dynamicFields[tab].filter((f) => f.baseKey === baseKey);
-    const nextIdx  = existing.length > 0
-      ? Math.max(...existing.map((f) => parseInt(f.key.split('_').pop(), 10) || 0)) + 1
-      : 1;
+    setDynamicFields((prev) => {
+      const existing = prev[tab];
 
-    const newKey   = `${baseKey}_${nextIdx}`;
-    const newLabel = `${BASE_KEY_LABEL[baseKey] || baseKey} ${nextIdx}`;
+      // Collect ALL taken indexes for this baseKey:
+      //   - from local dynamicFields state (includes empty cards)
+      //   - from DB keys already in localDoc (uploaded copies)
+      const takenIndexes = new Set();
 
-    // Prevent duplicates (shouldn't happen, but guard anyway)
-    if (dynamicFields[tab].some((f) => f.key === newKey)) return;
+      existing
+        .filter((f) => f.baseKey === baseKey)
+        .forEach((f) => {
+          const idx = parseInt(f.key.split('_').pop(), 10);
+          if (!isNaN(idx)) takenIndexes.add(idx);
+        });
 
-    setDynamicFields((prev) => ({
-      ...prev,
-      [tab]: [...prev[tab], { key: newKey, baseKey, label: newLabel }],
-    }));
+      const dbTabData = localDoc[tab] || {};
+      Object.keys(dbTabData)
+        .filter((k) => k.startsWith(`${baseKey}_`))
+        .forEach((k) => {
+          const idx = parseInt(k.split('_').pop(), 10);
+          if (!isNaN(idx)) takenIndexes.add(idx);
+        });
+
+      // Generate `quantity` new entries using the next available indexes
+      const newEntries = [];
+      let cursor = 1;
+      while (newEntries.length < quantity) {
+        if (!takenIndexes.has(cursor)) {
+          takenIndexes.add(cursor); // reserve immediately to avoid self-collision
+          newEntries.push({
+            key:     `${baseKey}_${cursor}`,
+            baseKey,
+            label:   `${BASE_KEY_LABEL[baseKey] || baseKey} ${cursor}`,
+          });
+        }
+        cursor++;
+        if (cursor > 1000) break; // safety valve
+      }
+
+      return { ...prev, [tab]: [...existing, ...newEntries] };
+    });
   };
 
   // ── Remove a dynamic card (delete file if uploaded, remove from state) ────────
@@ -462,9 +523,11 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               </div>
 
               {/* ── "Add More" toolbar ───────────────────────────────────── */}
-              <div className="flex items-center gap-3 pt-4 border-t border-slate-800/70">
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-500 mb-1.5">إضافة نسخة إضافية من</label>
+              <div className="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-800/70">
+
+                {/* Document type dropdown */}
+                <div className="flex-1 min-w-40">
+                  <label className="block text-xs text-slate-500 mb-1.5">إضافة نسخة من</label>
                   <select
                     value={addDropdown[activeTab]}
                     onChange={(e) =>
@@ -478,6 +541,25 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                     ))}
                   </select>
                 </div>
+
+                {/* Quantity input */}
+                <div className="w-24 flex-shrink-0">
+                  <label className="block text-xs text-slate-500 mb-1.5">
+                    <span className="flex items-center gap-1"><Hash size={11} /> الكمية</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={addQty[activeTab]}
+                    onChange={(e) =>
+                      setAddQty((prev) => ({ ...prev, [activeTab]: e.target.value }))
+                    }
+                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-sm text-slate-200 text-center outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                {/* Add button */}
                 <button
                   type="button"
                   onClick={() => handleAddField(activeTab)}
