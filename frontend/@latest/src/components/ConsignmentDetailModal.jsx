@@ -34,9 +34,11 @@ import {
   ListChecks,
   SlidersHorizontal,
   XCircle,
+  Calculator,
 } from 'lucide-react';
 import UploadCard from './UploadCard';
 import ProgressBar from './ProgressBar';
+import RefundTab from './RefundTab';
 import { RECEIPTS, DOCUMENTS } from '../lib/fileDefinitions';
 import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload, customMergeAndDownload } from '../lib/mergeEngine';
@@ -52,6 +54,7 @@ const TAB_CONFIG = {
 const TABS = [
   { id: 'documents', ...TAB_CONFIG.documents },
   { id: 'receipts',  ...TAB_CONFIG.receipts  },
+  { id: 'refunds',   label: 'حاسبات',  icon: Calculator },
 ];
 
 // Build a lookup map: baseKey → label  (used to label dynamic copies)
@@ -281,6 +284,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
   // ── Add one or more dynamic copies of a document type ───────────────────────
   const handleAddField = (tab) => {
+    // 'refunds' tab has no upload definitions — do nothing
+    if (!TAB_CONFIG[tab]) return;
+
     const baseKey  = addDropdown[tab];
     const quantity = Math.max(1, Math.min(20, parseInt(addQty[tab], 10) || 1));
 
@@ -438,10 +444,13 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   };
 
   // ── Derived values ────────────────────────────────────────────────────────────
-  const currentDefs       = TAB_CONFIG[activeTab].defs;
-  const tabData           = localDoc[activeTab] || {};
-  const accent            = COMPANY_COLOR[localDoc.companyName] || 'slate';
-  const activeDynFields   = dynamicFields[activeTab] || [];
+  // TAB_CONFIG only has entries for 'documents' and 'receipts'.
+  // When activeTab === 'refunds', TAB_CONFIG[activeTab] is undefined, so we
+  // use optional chaining and fall back to safe empty values to prevent the crash.
+  const currentDefs     = TAB_CONFIG[activeTab]?.defs ?? [];
+  const tabData         = localDoc[activeTab] || {};
+  const accent          = COMPANY_COLOR[localDoc.companyName] || 'slate';
+  const activeDynFields = dynamicFields[activeTab] ?? [];
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -549,7 +558,8 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               ))}
             </div>
 
-            {/* Upload grid */}
+            {/* Upload grid — only for documents/receipts tabs */}
+            {activeTab !== 'refunds' && (
             <div className="p-4 sm:p-6 bg-slate-50/50 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
@@ -659,9 +669,18 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                 </button>
               </div>
             </div>
+            )}
+
+            {/* ── Refund calculations tab ──────────────────────────────────── */}
+            {activeTab === 'refunds' && (
+              <div className="p-4 sm:p-6">
+                <RefundTab detailDoc={localDoc} />
+              </div>
+            )}
           </div>
 
-          {/* Section 3: Merge controls */}
+          {/* Section 3: Merge controls — hidden on the حاسبات tab */}
+          {activeTab !== 'refunds' && (<>
 
           {/* Standard merge progress bar */}
           {merging && <ProgressBar message={mergeMessage} />}
@@ -757,6 +776,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               </button>
             </div>
           )}
+          </>)}
 
         </div>
       </div>

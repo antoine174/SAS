@@ -24,6 +24,7 @@ const cors = require('cors');
 const Consignment = require('./models/Consignment');
 const multer = require('multer');
 const fs = require('fs');
+const refundsRouter = require('./refunds');
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
@@ -60,6 +61,9 @@ mongoose
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Backend is alive' });
 });
+
+// ─── Refunds router ───────────────────────────────────────────────────────────
+app.use('/api/refunds', refundsRouter);
 
 /**
  * GET /api/consignments

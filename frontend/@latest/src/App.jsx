@@ -29,10 +29,12 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
 } from 'lucide-react';
 
 import ConsignmentHeader from './components/ConsignmentHeader';
 import ConsignmentDetailModal from './components/ConsignmentDetailModal';
+import RefundsDashboard from './components/RefundsDashboard';
 import { fetchApi } from './lib/api';
 
 // ─── Search type options ──────────────────────────────────────────────────────
@@ -70,6 +72,21 @@ export default function App() {
   const [currentPage,  setCurrentPage]  = useState(1);
   const [totalPages,   setTotalPages]   = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+
+  // ── Refund dashboard state ───────────────────────────────────────────────
+  const [refundCount,          setRefundCount]          = useState(0);
+  const [showRefundsDashboard, setShowRefundsDashboard] = useState(false);
+
+  const fetchRefundCount = useCallback(async () => {
+    try {
+      const res = await fetchApi('/api/refunds/count');
+      setRefundCount(typeof res?.count === 'number' ? res.count : 0);
+    } catch {
+      // Non-fatal — badge just shows 0
+    }
+  }, []);
+
+  useEffect(() => { fetchRefundCount(); }, [fetchRefundCount]);
 
   // ── Detail modal state ──────────────────────────────────────────────────────
   const [detailDoc, setDetailDoc] = useState(null);
@@ -185,6 +202,7 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
+    <>
     <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-800 font-[Tajawal,sans-serif]">
 
       <ToastContainer position="bottom-left" rtl pauseOnHover closeOnClick newestOnTop />
@@ -203,6 +221,24 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Refund count badge */}
+            <button
+              type="button"
+              id="btn-refunds-dashboard"
+              onClick={() => setShowRefundsDashboard(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-bold transition-all shadow-sm
+                ${
+                  refundCount > 0
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/25 animate-pulse hover:animate-none'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+            >
+              <BarChart3 size={15} />
+              <span className="hidden sm:inline">ملفات الاسترداد النشطة:</span>
+              <span className={`font-mono ${ refundCount > 0 ? 'text-white' : 'text-slate-700' }`}>
+                {refundCount}
+              </span>
+            </button>
             <FileStack size={16} className="text-slate-400" />
             <span className="text-sm text-slate-400 hidden sm:inline">سجل الشحنات</span>
           </div>
@@ -620,5 +656,16 @@ export default function App() {
         SAS — نظام التخليص الجمركي © {new Date().getFullYear()}
       </footer>
     </div>
+
+    {/* ── Refunds Dashboard overlay ────────────────────────────────────────── */}
+    {showRefundsDashboard && (
+      <RefundsDashboard
+        onClose={() => {
+          setShowRefundsDashboard(false);
+          fetchRefundCount(); // refresh badge count after dashboard closes
+        }}
+      />
+    )}
+    </>
   );
 }
