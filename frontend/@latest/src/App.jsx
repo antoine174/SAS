@@ -27,32 +27,31 @@ import {
   FlaskConical,
   Receipt,
   Eye,
-  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 import ConsignmentHeader from './components/ConsignmentHeader';
 import ConsignmentDetailModal from './components/ConsignmentDetailModal';
 import { fetchApi } from './lib/api';
 
-// ─── Field meta (used in search filters AND result cards) ─────────────────────
-const FIELDS = [
-  { key: 'companyName',           labelAr: 'اسم الشركة',          icon: Building2,    mono: false },
-  { key: 'acid',                  labelAr: 'ACID',                 icon: FlaskConical, mono: true  },
-  { key: 'invoiceSequenceNumber', labelAr: 'رقم تسلسل الفاتورة', icon: Receipt,      mono: true  },
-  { key: 'consignmentNumber',     labelAr: 'رقم البوليصة',        icon: Hash,         mono: true  },
-  { key: 'itemName',              labelAr: 'اسم الصنف',           icon: Package,      mono: false },
-  { key: 'count',                 labelAr: 'العدد',               icon: Layers,       mono: true  },
-  { key: 'supplierName',          labelAr: 'اسم المورد',          icon: Truck,        mono: false },
-  { key: 'certificateNumber',     labelAr: 'رقم الشهاده',       icon: Hash,         mono: false },
-  { key: 'arrivalPort',           labelAr: 'ميناء الوصول',       icon: Package,      mono: false },
-  { key: 'fileNumber',            labelAr: 'رقم الملف',           icon: Layers,       mono: false },
+// ─── Search type options ──────────────────────────────────────────────────────
+const SEARCH_TYPES = [
+  { key: 'companyName',           labelAr: 'اسم الشركة'           },
+  { key: 'acid',                  labelAr: 'ACID'                  },
+  { key: 'consignmentNumber',     labelAr: 'رقم البوليصة'         },
+  { key: 'invoiceSequenceNumber', labelAr: 'رقم الفاتورة'         },
+  { key: 'itemName',              labelAr: 'اسم الصنف'            },
+  { key: 'count',                 labelAr: 'العدد'                },
+  { key: 'supplierName',          labelAr: 'اسم المورد'           },
+  { key: 'certificateNumber',     labelAr: 'رقم الشهاده'          },
+  { key: 'arrivalPort',           labelAr: 'ميناء الوصول'         },
+  { key: 'fileNumber',            labelAr: 'رقم الملف'            },
 ];
 
-const EMPTY_FILTERS = {
-  companyName: '', acid: '', invoiceSequenceNumber: '',
-  consignmentNumber: '', itemName: '', count: '', supplierName: '',
-  certificateNumber: '', arrivalPort: '', fileNumber: '',
-};
+const COMPANY_OPTIONS = ['مصانع الترياق', 'شركة الزامل'];
+
+const PAGE_LIMIT = 10;
 
 const COMPANY_COLOR = {
   'مصانع الترياق': 'blue',
@@ -61,11 +60,16 @@ const COMPANY_COLOR = {
 
 export default function App() {
   // ── Search state ────────────────────────────────────────────────────────────
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [results, setResults] = useState([]);
+  const [searchType,  setSearchType]  = useState(SEARCH_TYPES[0].key);
+  const [searchValue, setSearchValue] = useState('');
+  const [results,     setResults]     = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [totalShown, setTotalShown] = useState(0);
+
+  // ── Pagination state ────────────────────────────────────────────────────────
+  const [currentPage,  setCurrentPage]  = useState(1);
+  const [totalPages,   setTotalPages]   = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   // ── Detail modal state ──────────────────────────────────────────────────────
   const [detailDoc, setDetailDoc] = useState(null);
@@ -80,38 +84,56 @@ export default function App() {
 
   const pwInputRef = useRef(null);
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-  const setFilter = (key) => (e) =>
-    setFilters((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const clearFilters = () => setFilters(EMPTY_FILTERS);
-
-  const hasActiveFilters = Object.values(filters).some((v) => v.trim() !== '');
-
   // ── Fetch / search ──────────────────────────────────────────────────────────
-  const runSearch = useCallback(async (overrideFilters) => {
+  const runSearch = useCallback(async (page = 1, overrideType, overrideValue) => {
     setIsSearching(true);
     try {
-      const active = overrideFilters ?? filters;
+      const type  = overrideType  ?? searchType;
+      const value = overrideValue ?? searchValue;
       const params = new URLSearchParams();
-      Object.entries(active).forEach(([k, v]) => {
-        if (v.trim()) params.append(k, v.trim());
-      });
+      if (value.trim()) params.append(type, value.trim());
+      params.append('page',  String(page));
+      params.append('limit', String(PAGE_LIMIT));
 
       const data = await fetchApi(`/api/consignments?${params.toString()}`);
-      const list = Array.isArray(data) ? data : [];
+      // ── Defensive defaults: always arrays/numbers, never undefined ────────
+      const list       = Array.isArray(data?.data) ? data.data : [];
+      const total      = typeof data?.totalRecords === 'number' ? data.totalRecords : list.length;
+      const pages      = typeof data?.totalPages   === 'number' ? data.totalPages  : (total > 0 ? 1 : 0);
+      const activePage = typeof data?.currentPage  === 'number' ? data.currentPage : page;
       setResults(list);
-      setTotalShown(list.length);
+      setTotalRecords(total);
+      setTotalPages(pages);
+      setCurrentPage(activePage);
       setHasSearched(true);
     } catch {
       toast.error('تعذّر تحميل البيانات من الخادم');
     } finally {
       setIsSearching(false);
     }
-  }, [filters]);
+  }, [searchType, searchValue]);
 
   // Load all records on mount
-  useEffect(() => { runSearch(EMPTY_FILTERS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { runSearch(1, SEARCH_TYPES[0].key, ''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When user changes search type, clear value and keep companyName dropdown in sync
+  const handleTypeChange = (e) => {
+    setSearchType(e.target.value);
+    setSearchValue('');
+  };
+
+  const handleSearchSubmit = (e) => {
+    e?.preventDefault();
+    runSearch(1);
+  };
+
+  const handleClear = () => {
+    setSearchValue('');
+    runSearch(1, searchType, '');
+  };
+
+  const hasActiveSearch = searchValue.trim() !== '';
+  const isCompanyType   = searchType === 'companyName';
 
   // ── Delete flow ─────────────────────────────────────────────────────────────
   const openDeleteModal = (id, label) => {
@@ -199,59 +221,85 @@ export default function App() {
         </div>
 
         {/* ── Create form (collapsible) ───────────────────────────────────── */}
-        <ConsignmentHeader onCreated={() => runSearch(EMPTY_FILTERS)} />
+        <ConsignmentHeader onCreated={() => runSearch(1, searchType, '')} />
 
-        {/* ── Search / filter panel ───────────────────────────────────────── */}
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 space-y-4">
-
+        {/* ── Search panel (two-field system) ─────────────────────────────── */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 space-y-4"
+        >
           <div className="flex items-center gap-2">
-            <Search size={16} className="text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700">البحث والتصفية</h2>
-            {hasActiveFilters && (
+            <Search size={16} className="text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-700">البحث في السجلات</h2>
+            {hasActiveSearch && (
               <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                فلاتر نشطة
+                بحث نشط
               </span>
             )}
           </div>
 
-          {/* Filter inputs – 2 per row on mobile, 3 on sm, 6 on lg */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {FIELDS.map(({ key, labelAr, mono }) => (
-              <div key={key}>
-                <label className="block text-xs text-slate-400 mb-1">{labelAr}</label>
-                <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Field 1 – Search Type dropdown */}
+            <div className="sm:w-52 flex-shrink-0">
+              <label className="block text-xs text-slate-400 mb-1">نوع البحث</label>
+              <select
+                id="search-type"
+                value={searchType}
+                onChange={handleTypeChange}
+                className={`${inputCls} cursor-pointer`}
+              >
+                {SEARCH_TYPES.map(({ key, labelAr }) => (
+                  <option key={key} value={key}>{labelAr}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Field 2 – Dynamic Search Value */}
+            <div className="flex-1">
+              <label className="block text-xs text-slate-400 mb-1">قيمة البحث</label>
+              <div className="relative">
+                {isCompanyType ? (
+                  <select
+                    id="search-value-select"
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    className={`${inputCls} cursor-pointer`}
+                  >
+                    <option value="">— اختر الشركة —</option>
+                    {COMPANY_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : (
                   <input
-                    id={`filter-${key}`}
+                    id="search-value-input"
                     type="text"
-                    placeholder="..."
-                    value={filters[key]}
-                    onChange={setFilter(key)}
-                    onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-                    className={`${inputCls} ${mono ? 'font-mono' : ''} pe-7`}
-                    dir={mono ? 'ltr' : 'rtl'}
+                    placeholder="أدخل قيمة البحث…"
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    className={`${inputCls} pe-8`}
                   />
-                  {filters[key] && (
-                    <button
-                      type="button"
-                      onClick={() => setFilters((p) => ({ ...p, [key]: '' }))}
-                      className="absolute inset-y-0 left-2 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
+                )}
+                {hasActiveSearch && !isCompanyType && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="absolute inset-y-0 left-2 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
               </div>
-            ))}
+            </div>
           </div>
 
           {/* Action row */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
-              type="button"
+              type="submit"
               id="btn-search"
-              onClick={() => runSearch()}
               disabled={isSearching}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold
                          bg-blue-600 hover:bg-blue-700 text-white
                          transition-all disabled:opacity-50 shadow-md shadow-blue-600/20
                          hover:scale-105 active:scale-100"
@@ -263,27 +311,27 @@ export default function App() {
               بحث
             </button>
 
-            {hasActiveFilters && (
+            {hasActiveSearch && (
               <button
                 type="button"
-                id="btn-clear-filters"
-                onClick={() => { clearFilters(); runSearch(EMPTY_FILTERS); }}
+                id="btn-clear-search"
+                onClick={handleClear}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
                            bg-white border border-slate-300 text-slate-600 hover:text-slate-800
                            hover:bg-slate-50 transition-all"
               >
                 <X size={14} />
-                مسح الفلاتر
+                مسح البحث
               </button>
             )}
 
             {hasSearched && (
               <span className="text-xs text-slate-500 me-auto">
-                {isSearching ? 'جارٍ البحث…' : `${totalShown} نتيجة`}
+                {isSearching ? 'جارٍ البحث…' : `${totalRecords} نتيجة إجمالية`}
               </span>
             )}
           </div>
-        </div>
+        </form>
 
         {/* ── Results ────────────────────────────────────────────────────────── */}
 
@@ -297,22 +345,23 @@ export default function App() {
         )}
 
         {/* Empty state */}
-        {hasSearched && !isSearching && results.length === 0 && (
+        {hasSearched && !isSearching && (!Array.isArray(results) || results.length === 0) && (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
             <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
               <FileStack size={28} className="text-slate-400" />
             </div>
             <div>
-              <p className="text-slate-700 font-semibold">لا توجد نتائج</p>
+              <p className="text-slate-700 font-semibold">لا توجد نتائج مطابقة للبحث</p>
               <p className="text-slate-500 text-sm mt-1">
-                {hasActiveFilters ? 'جرّب تعديل الفلاتر أو مسحها' : 'لا توجد شحنات مسجّلة بعد'}
+                {hasActiveSearch ? 'جرّب تعديل قيمة البحث أو مسحها' : 'لا توجد شحنات مسجّلة بعد'}
               </p>
             </div>
           </div>
         )}
 
-        {/* Result cards */}
-        {hasSearched && results.length > 0 && (
+        {/* Result cards – Array.isArray guard prevents crash if state is ever undefined */}
+        {hasSearched && Array.isArray(results) && results.length > 0 && (
+          <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {results.map((doc) => {
               const accentColor = COMPANY_COLOR[doc.companyName] ?? 'slate';
@@ -398,6 +447,77 @@ export default function App() {
               );
             })}
           </div>
+
+          {/* ── Pagination UI – hidden when 0 results or single page ──────── */}
+          {Array.isArray(results) && results.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
+              {/* Previous */}
+              <button
+                id="btn-page-prev"
+                type="button"
+                onClick={() => runSearch(currentPage - 1)}
+                disabled={currentPage <= 1 || isSearching}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
+                           border border-slate-300 bg-white text-slate-600
+                           hover:bg-slate-50 hover:border-blue-400 hover:text-blue-600
+                           disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight size={15} />
+                السابق
+              </button>
+
+              {/* Page numbers */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                .reduce((acc, p, idx, arr) => {
+                  if (idx > 0 && p - arr[idx - 1] > 1) acc.push('...');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  item === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 text-sm select-none">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      id={`btn-page-${item}`}
+                      type="button"
+                      onClick={() => runSearch(item)}
+                      disabled={isSearching}
+                      className={`w-9 h-9 rounded-xl text-sm font-semibold transition-all
+                        ${
+                          item === currentPage
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-105'
+                            : 'border border-slate-300 bg-white text-slate-600 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )
+              }
+
+              {/* Next */}
+              <button
+                id="btn-page-next"
+                type="button"
+                onClick={() => runSearch(currentPage + 1)}
+                disabled={currentPage >= totalPages || isSearching}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
+                           border border-slate-300 bg-white text-slate-600
+                           hover:bg-slate-50 hover:border-blue-400 hover:text-blue-600
+                           disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                التالي
+                <ChevronLeft size={15} />
+              </button>
+
+              <span className="w-full text-center text-xs text-slate-400 mt-1">
+                صفحة {currentPage} من {totalPages}
+              </span>
+            </div>
+          )}
+          </>
         )}
       </main>
 
@@ -407,7 +527,7 @@ export default function App() {
           detailDoc={detailDoc}
           closeDetail={closeDetail}
           openDeleteModal={openDeleteModal}
-          onUpdate={() => runSearch()}
+          onUpdate={() => runSearch(currentPage)}
         />
       )}
 

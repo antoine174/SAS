@@ -79,21 +79,40 @@ app.get('/api/health', (req, res) => {
 app.get('/api/consignments', async (req, res) => {
   try {
     const query = {};
-    const { companyName, acid, invoiceSequenceNumber, consignmentNumber, itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber } = req.query;
+    const {
+      companyName, acid, invoiceSequenceNumber, consignmentNumber,
+      itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
+    } = req.query;
 
-    if (companyName)         query.companyName         = { $regex: companyName,         $options: 'i' };
-    if (acid)                query.acid                = { $regex: acid,                $options: 'i' };
+    // ── Search filters (case-insensitive partial match) ───────────────────────
+    if (companyName)           query.companyName           = { $regex: companyName,           $options: 'i' };
+    if (acid)                  query.acid                  = { $regex: acid,                  $options: 'i' };
     if (invoiceSequenceNumber) query.invoiceSequenceNumber = { $regex: invoiceSequenceNumber, $options: 'i' };
-    if (consignmentNumber)   query.consignmentNumber   = { $regex: consignmentNumber,   $options: 'i' };
-    if (itemName)            query.itemName            = { $regex: itemName,            $options: 'i' };
-    if (count)               query.count               = { $regex: count,               $options: 'i' };
-    if (supplierName)        query.supplierName        = { $regex: supplierName,        $options: 'i' };
-    if (certificateNumber)   query.certificateNumber   = { $regex: certificateNumber,   $options: 'i' };
-    if (arrivalPort)         query.arrivalPort         = { $regex: arrivalPort,         $options: 'i' };
-    if (fileNumber)          query.fileNumber          = { $regex: fileNumber,          $options: 'i' };
+    if (consignmentNumber)     query.consignmentNumber     = { $regex: consignmentNumber,     $options: 'i' };
+    if (itemName)              query.itemName              = { $regex: itemName,              $options: 'i' };
+    if (count)                 query.count                 = { $regex: count,                 $options: 'i' };
+    if (supplierName)          query.supplierName          = { $regex: supplierName,          $options: 'i' };
+    if (certificateNumber)     query.certificateNumber     = { $regex: certificateNumber,     $options: 'i' };
+    if (arrivalPort)           query.arrivalPort           = { $regex: arrivalPort,           $options: 'i' };
+    if (fileNumber)            query.fileNumber            = { $regex: fileNumber,            $options: 'i' };
 
-    const docs = await Consignment.find(query).sort({ createdAt: -1 }).limit(100);
-    res.json(docs);
+    // ── Pagination params ─────────────────────────────────────────────────────
+    const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
+    const skip  = (page - 1) * limit;
+
+    // Run count + paginated find in parallel for efficiency
+    const [total, docs] = await Promise.all([
+      Consignment.countDocuments(query),
+      Consignment.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    ]);
+
+    res.json({
+      data:         docs,
+      totalPages:   Math.ceil(total / limit),
+      currentPage:  page,
+      totalRecords: total,
+    });
   } catch (err) {
     console.error("GET /api/consignments Error Stack:", err.stack);
     res.status(500).json({ message: 'خطأ في الخادم', error: err.message, stack: err.stack });
