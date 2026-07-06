@@ -75,6 +75,7 @@ const COMPANY_COLOR = { 'مصانع الترياق': 'blue', 'شركة الزا�
  * @returns {Array<{ key, baseKey, label }>}
  */
 function extractDbDynamicFields(tab, tabData) {
+  if (!TAB_CONFIG[tab]) return [];
   if (!tabData || typeof tabData !== 'object') return [];
   const baseDefs = TAB_CONFIG[tab].defs;
   const baseKeys = new Set(baseDefs.map((d) => d.key));
