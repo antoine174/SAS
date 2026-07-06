@@ -24,7 +24,7 @@ const cors = require('cors');
 const Consignment = require('./models/Consignment');
 const multer = require('multer');
 const fs = require('fs');
-const refundsRouter = require('./refunds');
+const refundRoutes = require('./refunds');
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
@@ -63,7 +63,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─── Refunds router ───────────────────────────────────────────────────────────
-app.use('/api/refunds', refundsRouter);
+app.use('/api/refunds', refundRoutes);
 
 /**
  * GET /api/consignments
