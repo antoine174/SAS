@@ -24,8 +24,7 @@ const cors = require('cors');
 const Consignment = require('./models/Consignment');
 const multer = require('multer');
 const fs = require('fs');
-const refundRoutes = require('./refunds');
-
+const refundRoutes = require('./_refunds');
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -89,21 +88,21 @@ app.get('/api/consignments', async (req, res) => {
     } = req.query;
 
     // ── Search filters (case-insensitive partial match) ───────────────────────
-    if (companyName)           query.companyName           = { $regex: companyName,           $options: 'i' };
-    if (acid)                  query.acid                  = { $regex: acid,                  $options: 'i' };
+    if (companyName) query.companyName = { $regex: companyName, $options: 'i' };
+    if (acid) query.acid = { $regex: acid, $options: 'i' };
     if (invoiceSequenceNumber) query.invoiceSequenceNumber = { $regex: invoiceSequenceNumber, $options: 'i' };
-    if (consignmentNumber)     query.consignmentNumber     = { $regex: consignmentNumber,     $options: 'i' };
-    if (itemName)              query.itemName              = { $regex: itemName,              $options: 'i' };
-    if (count)                 query.count                 = { $regex: count,                 $options: 'i' };
-    if (supplierName)          query.supplierName          = { $regex: supplierName,          $options: 'i' };
-    if (certificateNumber)     query.certificateNumber     = { $regex: certificateNumber,     $options: 'i' };
-    if (arrivalPort)           query.arrivalPort           = { $regex: arrivalPort,           $options: 'i' };
-    if (fileNumber)            query.fileNumber            = { $regex: fileNumber,            $options: 'i' };
+    if (consignmentNumber) query.consignmentNumber = { $regex: consignmentNumber, $options: 'i' };
+    if (itemName) query.itemName = { $regex: itemName, $options: 'i' };
+    if (count) query.count = { $regex: count, $options: 'i' };
+    if (supplierName) query.supplierName = { $regex: supplierName, $options: 'i' };
+    if (certificateNumber) query.certificateNumber = { $regex: certificateNumber, $options: 'i' };
+    if (arrivalPort) query.arrivalPort = { $regex: arrivalPort, $options: 'i' };
+    if (fileNumber) query.fileNumber = { $regex: fileNumber, $options: 'i' };
 
     // ── Pagination params ─────────────────────────────────────────────────────
-    const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     // Run count + paginated find in parallel for efficiency
     const [total, docs] = await Promise.all([
@@ -112,9 +111,9 @@ app.get('/api/consignments', async (req, res) => {
     ]);
 
     res.json({
-      data:         docs,
-      totalPages:   Math.ceil(total / limit),
-      currentPage:  page,
+      data: docs,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
       totalRecords: total,
     });
   } catch (err) {
@@ -202,16 +201,16 @@ app.put('/api/consignments/:id', async (req, res) => {
     const doc = await Consignment.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    doc.companyName           = companyName;
-    doc.acid                  = acid;
+    doc.companyName = companyName;
+    doc.acid = acid;
     doc.invoiceSequenceNumber = invoiceSequenceNumber;
-    doc.consignmentNumber     = consignmentNumber;
-    doc.itemName              = itemName;
-    doc.count                 = count;
-    doc.supplierName          = supplierName;
-    doc.certificateNumber     = certificateNumber;
-    doc.arrivalPort           = arrivalPort;
-    doc.fileNumber            = fileNumber;
+    doc.consignmentNumber = consignmentNumber;
+    doc.itemName = itemName;
+    doc.count = count;
+    doc.supplierName = supplierName;
+    doc.certificateNumber = certificateNumber;
+    doc.arrivalPort = arrivalPort;
+    doc.fileNumber = fileNumber;
 
     await doc.save();
     res.json(doc);
@@ -298,7 +297,7 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
     // Hard-delete if both tabs are now empty
-    const receiptsEmpty  = Object.keys(doc.receipts  || {}).length === 0 || Object.values(doc.receipts  || {}).every((v) => !v);
+    const receiptsEmpty = Object.keys(doc.receipts || {}).length === 0 || Object.values(doc.receipts || {}).every((v) => !v);
     const documentsEmpty = Object.keys(doc.documents || {}).length === 0 || Object.values(doc.documents || {}).every((v) => !v);
 
     if (receiptsEmpty && documentsEmpty) {
