@@ -15,8 +15,7 @@ import { useState } from 'react';
 import { PlusCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { fetchApi } from '../lib/api';
-
-const COMPANIES = ['مصانع الترياق', 'شركة الزامل'];
+import { COMPANIES } from '../lib/constants';
 
 const EMPTY_FORM = {
   companyName:           COMPANIES[0],

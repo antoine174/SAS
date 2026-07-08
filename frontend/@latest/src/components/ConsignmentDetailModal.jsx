@@ -43,6 +43,7 @@ import { RECEIPTS, DOCUMENTS } from '../lib/fileDefinitions';
 import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload, customMergeAndDownload } from '../lib/mergeEngine';
 import { fetchApi } from '../lib/api';
+import { COMPANIES, COMPANY_COLOR } from '../lib/constants';
 
 // ─── Tab configuration ────────────────────────────────────────────────────────
 
@@ -62,9 +63,6 @@ const BASE_KEY_LABEL = {};
 [...DOCUMENTS, ...RECEIPTS].forEach(({ key, label }) => { BASE_KEY_LABEL[key] = label; });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const COMPANIES     = ['مصانع الترياق', 'شركة الزامل'];
-const COMPANY_COLOR = { 'مصانع الترياق': 'blue', 'شركة الزامل': 'sky' };
 
 /**
  * Given the raw tabData from the DB, extract dynamic fields

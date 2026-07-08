@@ -36,6 +36,7 @@ import ConsignmentHeader from './components/ConsignmentHeader';
 import ConsignmentDetailModal from './components/ConsignmentDetailModal';
 import RefundsDashboard from './components/RefundsDashboard';
 import { fetchApi } from './lib/api';
+import { COMPANIES, COMPANY_COLOR } from './lib/constants';
 
 // ─── Search type options ──────────────────────────────────────────────────────
 const SEARCH_TYPES = [
@@ -51,14 +52,7 @@ const SEARCH_TYPES = [
   { key: 'fileNumber',            labelAr: 'رقم الملف'            },
 ];
 
-const COMPANY_OPTIONS = ['مصانع الترياق', 'شركة الزامل'];
-
 const PAGE_LIMIT = 10;
-
-const COMPANY_COLOR = {
-  'مصانع الترياق': 'blue',
-  'شركة الزامل': 'sky',
-};
 
 export default function App() {
   // ── Search state ────────────────────────────────────────────────────────────
@@ -302,7 +296,7 @@ export default function App() {
                     className={`${inputCls} cursor-pointer`}
                   >
                     <option value="">— اختر الشركة —</option>
-                    {COMPANY_OPTIONS.map((opt) => (
+                    {COMPANIES.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
