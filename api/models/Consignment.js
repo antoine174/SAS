@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const consignmentSchema = new mongoose.Schema({
-  companyName:           { type: String, enum: ['مصانع الترياق', 'شركة الزامل'], required: true },
+  companyName:           { type: String, enum: ['مصانع الترياق', 'شركة الزامل', 'شركة الزامل للهياكل الفولاذية', 'شركة الزامل للمباني الحديدية', 'مصنع الصفوة للصناعات البلاستيكية', 'بافت للتصنيع و التنمية'], required: true },
   acid:                  { type: String, lowercase: true, required: true, unique: true },
   invoiceSequenceNumber: { type: String, lowercase: true },
   consignmentNumber:     { type: String, lowercase: true },
