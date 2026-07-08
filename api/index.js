@@ -22,10 +22,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Consignment = require('./models/Consignment');
-const multer = require('multer');
 const fs = require('fs');
 const refundRoutes = require('./_refunds');
-const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
@@ -312,43 +310,26 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
 
 /**
  * POST /api/consignments/:id/upload
- * Handles file uploads via FormData (multer) and proxies them to Supabase.
- * IMPORTANT: Must be placed BEFORE app.use('*') or any catch-all routes!
+ * Direct-to-Cloud architecture: receives JSON metadata after frontend uploads to Supabase.
  */
-app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res) => {
+app.post('/api/consignments/:id/upload', async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "No file provided" });
     const { id } = req.params;
-    const { tab, key } = req.body;
+    const { tab, key, filePath } = req.body;
 
-    if (!tab || !key) return res.status(400).json({ message: "Missing required fields" });
-    if (!supabase) throw new Error("Supabase credentials missing on server");
-
-    // Use req.file.buffer directly - no fs.readFileSync needed
-    const storagePath = `${id}/${key}.pdf`;
-
-    const { error } = await supabase.storage
-      .from('consignments')
-      .upload(storagePath, req.file.buffer, {
-        contentType: 'application/pdf',
-        upsert: true
-      });
-
-    if (error) throw new Error(`Supabase error: ${error.message}`);
-
-    const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/consignments/${storagePath}`;
+    if (!tab || !key || !filePath) return res.status(400).json({ message: "Missing required fields: tab, key, or filePath" });
 
     const updatePath = `${tab}.${key}`;
     const doc = await Consignment.findByIdAndUpdate(
       id,
-      { $set: { [updatePath]: publicUrl } },
+      { $set: { [updatePath]: filePath } },
       { new: true }
     );
 
     if (!doc) return res.status(404).json({ message: 'Consignment not found' });
     res.status(200).json(doc);
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error("Upload metadata error:", error);
     res.status(500).json({ message: error.message });
   }
 });

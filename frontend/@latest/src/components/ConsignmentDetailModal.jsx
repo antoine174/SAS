@@ -231,14 +231,22 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     setUploadingKeys((prev) => new Set(prev).add(uploadKey));
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('tab',  tab);
-      formData.append('key',  key);
+      const storagePath = `${localDoc._id}/${key}.pdf`;
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .upload(storagePath, file, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+      const publicUrl = publicUrlData.publicUrl;
 
       const data = await fetchApi(`/api/consignments/${localDoc._id}/upload`, {
         method: 'POST',
-        body:   formData,
+        body: JSON.stringify({ tab, key, filePath: publicUrl }),
       });
 
       setLocalDoc(data);
