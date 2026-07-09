@@ -593,54 +593,55 @@ export default function App() {
               </p>
             </div>
 
-            {/* Password input */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 block">
-                رمز تأكيد الحذف
-              </label>
-              <input
-                ref={pwInputRef}
-                id="delete-password-input"
-                type="password"
-                autoFocus
-                placeholder="أدخل الرمز…"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
-                className="w-full bg-white border border-slate-300 focus:border-red-500
-                           focus:ring-2 focus:ring-red-500/20 rounded-xl px-4 py-3
-                           text-sm text-slate-800 placeholder-slate-400 outline-none
-                           transition-all text-right"
-              />
-            </div>
+            {/* Password input and Buttons wrapped in a form to prevent race conditions */}
+            <form onSubmit={(e) => { e.preventDefault(); confirmDelete(); }} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700 block">
+                  رمز تأكيد الحذف
+                </label>
+                <input
+                  ref={pwInputRef}
+                  id="delete-password-input"
+                  type="password"
+                  autoComplete="new-password"
+                  autoFocus
+                  placeholder="أدخل الرمز…"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="w-full bg-white border border-slate-300 focus:border-red-500
+                             focus:ring-2 focus:ring-red-500/20 rounded-xl px-4 py-3
+                             text-sm text-slate-800 placeholder-slate-400 outline-none
+                             transition-all text-right"
+                />
+              </div>
 
-            {/* Buttons */}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={closeDeleteModal}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700
-                           text-sm font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                id="btn-confirm-delete"
-                onClick={confirmDelete}
-                disabled={isDeleting}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
-                           bg-red-600 hover:bg-red-700 disabled:opacity-60
-                           text-white text-sm font-bold transition-colors
-                           shadow-md shadow-red-600/20"
-              >
-                {isDeleting
-                  ? <Loader2 size={15} className="animate-spin" />
-                  : <Trash2 size={15} />
-                }
-                تأكيد الحذف
-              </button>
-            </div>
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700
+                             text-sm font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  id="btn-confirm-delete"
+                  disabled={isDeleting}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                             bg-red-600 hover:bg-red-700 disabled:opacity-60
+                             text-white text-sm font-bold transition-colors
+                             shadow-md shadow-red-600/20"
+                >
+                  {isDeleting
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <Trash2 size={15} />
+                  }
+                  تأكيد الحذف
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

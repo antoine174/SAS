@@ -76,21 +76,21 @@ function DeleteSection({ recordId, onDeleted }) {
   }
 
   return (
-    <div className="space-y-2 bg-red-50 border border-red-200 rounded-xl p-3">
+    <form onSubmit={(e) => { e.preventDefault(); handleDelete(); }} className="space-y-2 bg-red-50 border border-red-200 rounded-xl p-3">
       <p className="text-xs text-red-700 font-semibold flex items-center gap-1">
         <AlertTriangle size={13} /> أدخل رمز التأكيد لحذف هذا الملف نهائياً:
       </p>
       <div className="flex gap-2">
         <input
           type="password"
+          autoComplete="new-password"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleDelete()}
           placeholder="رمز الحذف…"
           className="flex-1 bg-white border border-red-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-red-400/20 text-right"
         />
         <button
-          onClick={handleDelete}
+          type="submit"
           disabled={isDeleting}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold disabled:opacity-50"
         >
@@ -98,13 +98,14 @@ function DeleteSection({ recordId, onDeleted }) {
           حذف
         </button>
         <button
+          type="button"
           onClick={() => { setOpen(false); setPw(''); }}
           className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs hover:bg-slate-50"
         >
           إلغاء
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
