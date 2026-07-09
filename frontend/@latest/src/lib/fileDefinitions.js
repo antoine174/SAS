@@ -47,4 +47,6 @@ export const RECEIPTS = [
   { key: 'agingReceipt', label: 'ايصال تعتيق' },
   { key: 'carEntryReceipt', label: 'ايصال دخول سيارة' },
   { key: 'carWaitingReceipt', label: 'ايصال انتظار سيارة' },
+  { key: 'transportInvoice', label: 'فاتورة نقل' },
+  { key: 'feesInvoice', label: 'فاتورة اتعاب' },
 ];
