@@ -242,9 +242,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
       const publicUrl = publicUrlData.publicUrl;
 
-      const data = await fetchApi(`/api/consignments/${localDoc._id}/upload`, {
-        method: 'POST',
-        body: JSON.stringify({ tab, key, filePath: publicUrl }),
+      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tab, key, url: publicUrl }),
       });
 
       setLocalDoc(data);
