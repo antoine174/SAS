@@ -11,24 +11,28 @@ if (!supabaseUrl || !supabaseKey) {
   const { createClient } = require('@supabase/supabase-js');
   supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
-require('dotenv').config();
 
-// Add these two lines to bypass local ISP DNS blocking
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '1.1.1.1']);
+// ✅ FIX 1: Wrap DNS hack so it ONLY runs locally, NEVER on Vercel.
+if (!process.env.VERCEL) {
+  const dns = require('dns');
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+}
 
-// ... the rest of your existing code
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Consignment = require('./models/Consignment');
+const multer = require('multer');
 const fs = require('fs');
+
+// ✅ FIX 2: Point to the correctly renamed hidden Vercel file
 const refundRoutes = require('./_refunds');
+
+const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
   origin: '*',
-  // Added 'PATCH' and 'PUT' to the list
   methods: ['GET', 'POST', 'DELETE', 'PATCH', 'PUT'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -46,7 +50,6 @@ mongoose
   })
   .catch((err) => {
     console.error('❌  MongoDB error:', err);
-    // Removed process.exit(1) to allow Vercel to boot and serve 500 error responses gracefully
   });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -64,18 +67,6 @@ app.use('/api/refunds', refundRoutes);
 
 /**
  * GET /api/consignments
- *
- * Multi-field, case-insensitive, partial-match search.
- * Supported query params: companyName, acid, consignmentNumber,
- *                         itemName, count, supplierName
- *
- * Each param is optional. Only the params that are present are added to the
- * MongoDB query, so omitting all params returns ALL records (up to 100).
- *
- * Example:
- *   GET /api/consignments?supplierName=avc&count=7x10
- *   → finds any document where supplierName contains "avc" (case-insensitive)
- *     AND count contains "7x10"
  */
 app.get('/api/consignments', async (req, res) => {
   try {
@@ -85,7 +76,6 @@ app.get('/api/consignments', async (req, res) => {
       itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
     } = req.query;
 
-    // ── Search filters (case-insensitive partial match) ───────────────────────
     if (companyName) query.companyName = { $regex: companyName, $options: 'i' };
     if (acid) query.acid = { $regex: acid, $options: 'i' };
     if (invoiceSequenceNumber) query.invoiceSequenceNumber = { $regex: invoiceSequenceNumber, $options: 'i' };
@@ -97,12 +87,10 @@ app.get('/api/consignments', async (req, res) => {
     if (arrivalPort) query.arrivalPort = { $regex: arrivalPort, $options: 'i' };
     if (fileNumber) query.fileNumber = { $regex: fileNumber, $options: 'i' };
 
-    // ── Pagination params ─────────────────────────────────────────────────────
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
     const skip = (page - 1) * limit;
 
-    // Run count + paginated find in parallel for efficiency
     const [total, docs] = await Promise.all([
       Consignment.countDocuments(query),
       Consignment.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -122,47 +110,24 @@ app.get('/api/consignments', async (req, res) => {
 
 /**
  * POST /api/consignments
- *
- * Create a new consignment record.
- * Body: { companyName, acid?, consignmentNumber, itemName?, count?, supplierName? }
- *
- * The `count` field is normalised by the Mongoose pre-save hook before storage.
  */
 app.post('/api/consignments', async (req, res) => {
   try {
     const {
-      companyName,
-      acid,
-      invoiceSequenceNumber,
-      consignmentNumber,
-      itemName,
-      count,
-      supplierName,
-      certificateNumber,
-      arrivalPort,
-      fileNumber,
+      companyName, acid, invoiceSequenceNumber, consignmentNumber,
+      itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
     } = req.body;
 
-    // Only companyName and acid are required
     if (!companyName || !acid)
       return res.status(400).json({ message: 'اسم الشركة ورقم ACID مطلوبان' });
 
     const doc = await Consignment.create({
-      companyName,
-      acid,
-      invoiceSequenceNumber,
-      consignmentNumber,
-      itemName,
-      count,
-      supplierName,
-      certificateNumber,
-      arrivalPort,
-      fileNumber,
+      companyName, acid, invoiceSequenceNumber, consignmentNumber,
+      itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
     });
 
     res.status(201).json(doc);
   } catch (err) {
-    // Duplicate ACID – surface as 409 instead of 500
     if (err.code === 11000)
       return res.status(409).json({ message: 'يوجد سجل بهذا الرقم ACID مسبقاً' });
     if (err.name === 'ValidationError')
@@ -175,22 +140,13 @@ app.post('/api/consignments', async (req, res) => {
 
 /**
  * PUT /api/consignments/:id
- * Update an existing consignment's flat fields.
  */
 app.put('/api/consignments/:id', async (req, res) => {
   try {
     if (!req.body) return res.status(400).json({ message: 'Request body is missing' });
     const {
-      companyName,
-      acid,
-      invoiceSequenceNumber,
-      consignmentNumber,
-      itemName,
-      count,
-      supplierName,
-      certificateNumber,
-      arrivalPort,
-      fileNumber,
+      companyName, acid, invoiceSequenceNumber, consignmentNumber,
+      itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
     } = req.body;
 
     if (!companyName || !acid)
@@ -225,7 +181,6 @@ app.put('/api/consignments/:id', async (req, res) => {
 
 /**
  * GET /api/consignments/:id
- * Returns a single complete consignment document.
  */
 app.get('/api/consignments/:id', async (req, res) => {
   try {
@@ -239,7 +194,6 @@ app.get('/api/consignments/:id', async (req, res) => {
 
 /**
  * PATCH /api/consignments/:id/file
- * Update a single document-slot URL after a Supabase upload.
  */
 app.patch('/api/consignments/:id/file', async (req, res) => {
   try {
@@ -266,13 +220,6 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
 
 /**
  * PATCH /api/consignments/:id/cleanup
- *
- * Wipes all files for a given tab (documents or receipts) by replacing the
- * entire sub-document with an empty object. This works for both static and
- * any number of dynamic keys (e.g. invoice_1, invoice_2 …) without
- * needing to enumerate them.
- *
- * After clearing, if BOTH sub-documents are empty the record is hard-deleted.
  */
 app.patch('/api/consignments/:id/cleanup', async (req, res) => {
   try {
@@ -286,7 +233,6 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
     if (!password || password !== process.env.DELETE_PASSWORD)
       return res.status(401).json({ message: 'رمز التأكيد غير صحيح' });
 
-    // Wipe the entire sub-document atomically — handles static AND dynamic keys
     const doc = await Consignment.findByIdAndUpdate(
       req.params.id,
       { $set: { [tab]: {} } },
@@ -294,7 +240,6 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
     );
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    // Hard-delete if both tabs are now empty
     const receiptsEmpty = Object.keys(doc.receipts || {}).length === 0 || Object.values(doc.receipts || {}).every((v) => !v);
     const documentsEmpty = Object.keys(doc.documents || {}).length === 0 || Object.values(doc.documents || {}).every((v) => !v);
 
@@ -310,61 +255,60 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
 
 /**
  * POST /api/consignments/:id/upload
- * Direct-to-Cloud architecture: receives JSON metadata after frontend uploads to Supabase.
  */
-app.post('/api/consignments/:id/upload', async (req, res) => {
+app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res) => {
   try {
+    if (!req.file) return res.status(400).json({ message: "No file provided" });
     const { id } = req.params;
-    const { tab, key, filePath } = req.body;
+    const { tab, key } = req.body;
 
-    if (!tab || !key || !filePath) return res.status(400).json({ message: "Missing required fields: tab, key, or filePath" });
+    if (!tab || !key) return res.status(400).json({ message: "Missing required fields" });
+    if (!supabase) throw new Error("Supabase credentials missing on server");
+
+    const storagePath = `${id}/${key}.pdf`;
+
+    const { error } = await supabase.storage
+      .from('consignments')
+      .upload(storagePath, req.file.buffer, {
+        contentType: 'application/pdf',
+        upsert: true
+      });
+
+    if (error) throw new Error(`Supabase error: ${error.message}`);
+
+    const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/consignments/${storagePath}`;
 
     const updatePath = `${tab}.${key}`;
     const doc = await Consignment.findByIdAndUpdate(
       id,
-      { $set: { [updatePath]: filePath } },
+      { $set: { [updatePath]: publicUrl } },
       { new: true }
     );
 
     if (!doc) return res.status(404).json({ message: 'Consignment not found' });
     res.status(200).json(doc);
   } catch (error) {
-    console.error("Upload metadata error:", error);
+    console.error("Upload error:", error);
     res.status(500).json({ message: error.message });
   }
 });
 
 /**
  * DELETE /api/consignments/:id
- *
- * Password-guarded hard delete.
- *
- * Security:
- *   - Reads `password` from the request body.
- *   - Compares strictly against process.env.DELETE_PASSWORD.
- *   - Returns 401 if password is missing or wrong.
- *
- * Supabase cleanup (optional):
- *   - Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in api/.env to enable.
- *   - Expects files stored under the bucket folder: {consignmentNumber}/
- *   - Errors here are non-fatal and logged to the console.
  */
 app.delete('/api/consignments/:id', async (req, res) => {
   try {
-    // ── Password guard ───────────────────────────────────────────────────────
     const { password } = req.body;
     if (!password || password !== process.env.DELETE_PASSWORD)
       return res.status(401).json({ message: 'رمز التأكيد غير صحيح' });
 
-    // ── Delete from MongoDB ──────────────────────────────────────────────────
     const doc = await Consignment.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    // ── Supabase storage cleanup ────
     try {
       if (!supabase) throw new Error("Supabase credentials missing on server");
 
-      const folder = doc._id.toString(); // Uses _id for Supabase folder
+      const folder = doc._id.toString();
       const { data: fileList, error: listErr } = await supabase.storage
         .from('consignments')
         .list(folder);
@@ -380,7 +324,6 @@ app.delete('/api/consignments/:id', async (req, res) => {
         else console.log(`🗑️  Deleted ${paths.length} file(s) from Supabase for "${folder}"`);
       }
     } catch (sbErr) {
-      // Non-fatal – MongoDB record is already deleted above
       console.error('⚠️  Supabase cleanup error (non-fatal):', sbErr.message);
     }
 
