@@ -6,7 +6,6 @@ const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROL
 let supabase = null;
 if (!supabaseUrl || !supabaseKey) {
   console.error("FATAL ERROR: Supabase credentials are not set in environment variables.");
-  // Removed process.exit(1) because it crashes Vercel Serverless Functions immediately
 } else {
   const { createClient } = require('@supabase/supabase-js');
   supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
@@ -23,13 +22,13 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const Consignment = require('./models/Consignment');
 const multer = require('multer');
-const fs = require('fs');
 
 // ✅ FIX 2: Point to the correctly renamed hidden Vercel file
 const refundRoutes = require('./_refunds');
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
   origin: '*',
@@ -37,12 +36,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
+
 // ─── MongoDB Connection ───────────────────────────────────────────────────────
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(async () => {
     console.log('✅  MongoDB connected');
-    // Ensure the legacy index is dropped on startup
     await mongoose.connection.db
       .collection('consignments')
       .dropIndex('billId_1_companyName_1')
@@ -54,10 +53,6 @@ mongoose
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/health
- * Health check endpoint for Vercel verification
- */
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Backend is alive' });
 });
@@ -65,9 +60,6 @@ app.get('/api/health', (req, res) => {
 // ─── Refunds router ───────────────────────────────────────────────────────────
 app.use('/api/refunds', refundRoutes);
 
-/**
- * GET /api/consignments
- */
 app.get('/api/consignments', async (req, res) => {
   try {
     const query = {};
@@ -108,9 +100,6 @@ app.get('/api/consignments', async (req, res) => {
   }
 });
 
-/**
- * POST /api/consignments
- */
 app.post('/api/consignments', async (req, res) => {
   try {
     const {
@@ -138,9 +127,6 @@ app.post('/api/consignments', async (req, res) => {
   }
 });
 
-/**
- * PUT /api/consignments/:id
- */
 app.put('/api/consignments/:id', async (req, res) => {
   try {
     if (!req.body) return res.status(400).json({ message: 'Request body is missing' });
@@ -179,9 +165,6 @@ app.put('/api/consignments/:id', async (req, res) => {
   }
 });
 
-/**
- * GET /api/consignments/:id
- */
 app.get('/api/consignments/:id', async (req, res) => {
   try {
     const doc = await Consignment.findById(req.params.id);
@@ -192,9 +175,6 @@ app.get('/api/consignments/:id', async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/consignments/:id/file
- */
 app.patch('/api/consignments/:id/file', async (req, res) => {
   try {
     if (!req.body) return res.status(400).json({ message: 'Request body is missing' });
@@ -218,9 +198,6 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/consignments/:id/cleanup
- */
 app.patch('/api/consignments/:id/cleanup', async (req, res) => {
   try {
     if (!req.body) return res.status(400).json({ message: 'Request body is missing' });
@@ -253,9 +230,6 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
   }
 });
 
-/**
- * POST /api/consignments/:id/upload
- */
 app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file provided" });
@@ -293,9 +267,6 @@ app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res)
   }
 });
 
-/**
- * DELETE /api/consignments/:id
- */
 app.delete('/api/consignments/:id', async (req, res) => {
   try {
     const { password } = req.body;
