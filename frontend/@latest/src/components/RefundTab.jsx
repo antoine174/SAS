@@ -179,6 +179,8 @@ export default function RefundTab({ detailDoc }) {
           certificateNumber: detailDoc.certificateNumber || '',
           arrivalPort:       detailDoc.arrivalPort       || '',
           supplierName:      detailDoc.supplierName      || '',
+          acid:              detailDoc.acid              || '',
+          itemName:          detailDoc.itemName          || '',
           // Form inputs
           ...form,
           containerCount: Number(form.containerCount),

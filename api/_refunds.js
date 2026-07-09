@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
     const {
       originalConsignmentId,
       // Copied survival fields
-      fileNumber, companyName, certificateNumber, arrivalPort, supplierName,
+      fileNumber, companyName, certificateNumber, arrivalPort, supplierName, acid, itemName,
       // Form inputs
       releaseDate, containerCount,
       finePaidUntil, guardPaidUntil,
@@ -43,6 +43,8 @@ router.post('/', async (req, res) => {
       certificateNumber: certificateNumber || '',
       arrivalPort:   arrivalPort   || '',
       supplierName:  supplierName  || '',
+      acid:          acid          || '',
+      itemName:      itemName      || '',
       releaseDate,
       containerCount: containerCount || 1,
       finePaidUntil,

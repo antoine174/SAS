@@ -28,6 +28,8 @@ const refundRecordSchema = new mongoose.Schema(
     certificateNumber:     { type: String, default: '' },
     arrivalPort:           { type: String, default: '' },
     supplierName:          { type: String, default: '' },
+    acid:                  { type: String, default: '' },
+    itemName:              { type: String, default: '' },
 
     // ── Form inputs ───────────────────────────────────────────────────────────
     releaseDate:      { type: Date },                             // تاريخ الصرف

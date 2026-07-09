@@ -203,6 +203,8 @@ function RefundCard({ record, onDeleted }) {
           {record.supplierName      && <span>المورد: <strong className="text-slate-700">{record.supplierName}</strong></span>}
           {record.certificateNumber && <span>ش: <strong className="text-slate-700 font-mono">{record.certificateNumber}</strong></span>}
           {record.arrivalPort       && <span>ميناء: <strong className="text-slate-700">{record.arrivalPort}</strong></span>}
+          {record.acid              && <span>ACID: <strong className="text-slate-700 font-mono">{record.acid}</strong></span>}
+          {record.itemName          && <span>الصنف: <strong className="text-slate-700">{record.itemName}</strong></span>}
         </div>
       </div>
 
