@@ -17,7 +17,8 @@
  *  - On localDoc updates, we MERGE new DB-discovered keys into existing state
  *    so empty local-only cards survive any upload response.
  */
-
+import { fetchApi } from '../lib/api';
+import { useUploadContext } from '../lib/UploadContext';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import {
@@ -42,20 +43,19 @@ import RefundTab from './RefundTab';
 import { RECEIPTS, DOCUMENTS } from '../lib/fileDefinitions';
 import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload, customMergeAndDownload } from '../lib/mergeEngine';
-import { fetchApi } from '../lib/api';
 import { COMPANIES, COMPANY_COLOR } from '../lib/constants';
 
 // ─── Tab configuration ────────────────────────────────────────────────────────
 
 const TAB_CONFIG = {
   documents: { defs: DOCUMENTS, label: 'المستندات', icon: FolderOpen },
-  receipts:  { defs: RECEIPTS,  label: 'الايصالات', icon: Receipt    },
+  receipts: { defs: RECEIPTS, label: 'الايصالات', icon: Receipt },
 };
 
 const TABS = [
   { id: 'documents', ...TAB_CONFIG.documents },
-  { id: 'receipts',  ...TAB_CONFIG.receipts  },
-  { id: 'refunds',   label: 'حاسبات',  icon: Calculator },
+  { id: 'receipts', ...TAB_CONFIG.receipts },
+  { id: 'refunds', label: 'حاسبات', icon: Calculator },
 ];
 
 // Build a lookup map: baseKey → label  (used to label dynamic copies)
@@ -77,18 +77,18 @@ function extractDbDynamicFields(tab, tabData) {
   if (!tabData || typeof tabData !== 'object') return [];
   const baseDefs = TAB_CONFIG[tab].defs;
   const baseKeys = new Set(baseDefs.map((d) => d.key));
-  const dynamic  = [];
+  const dynamic = [];
 
   for (const storedKey of Object.keys(tabData)) {
     const match = storedKey.match(/^(.+)_(\d+)$/);
     if (!match) continue;
     const baseKey = match[1];
-    const index   = parseInt(match[2], 10);
+    const index = parseInt(match[2], 10);
     if (!baseKeys.has(baseKey)) continue;
     dynamic.push({
-      key:     storedKey,
+      key: storedKey,
       baseKey,
-      label:   `${BASE_KEY_LABEL[baseKey] || baseKey} ${index}`,
+      label: `${BASE_KEY_LABEL[baseKey] || baseKey} ${index}`,
     });
   }
 
@@ -98,7 +98,7 @@ function extractDbDynamicFields(tab, tabData) {
     const orderDiff = baseOrder.indexOf(a.baseKey) - baseOrder.indexOf(b.baseKey);
     if (orderDiff !== 0) return orderDiff;
     return (parseInt(a.key.split('_').pop(), 10) || 0)
-         - (parseInt(b.key.split('_').pop(), 10) || 0);
+      - (parseInt(b.key.split('_').pop(), 10) || 0);
   });
 
   return dynamic;
@@ -132,25 +132,40 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
   // Flat metadata form state
   const [form, setForm] = useState({
-    companyName:           detailDoc.companyName           || COMPANIES[0],
-    acid:                  detailDoc.acid                  || '',
+    companyName: detailDoc.companyName || COMPANIES[0],
+    acid: detailDoc.acid || '',
     invoiceSequenceNumber: detailDoc.invoiceSequenceNumber || '',
-    consignmentNumber:     detailDoc.consignmentNumber     || '',
-    itemName:              detailDoc.itemName              || '',
-    count:                 detailDoc.count                 || '',
-    supplierName:          detailDoc.supplierName          || '',
-    certificateNumber:     detailDoc.certificateNumber     || '',
-    arrivalPort:           detailDoc.arrivalPort           || '',
-    fileNumber:            detailDoc.fileNumber            || '',
+    consignmentNumber: detailDoc.consignmentNumber || '',
+    itemName: detailDoc.itemName || '',
+    count: detailDoc.count || '',
+    supplierName: detailDoc.supplierName || '',
+    certificateNumber: detailDoc.certificateNumber || '',
+    arrivalPort: detailDoc.arrivalPort || '',
+    fileNumber: detailDoc.fileNumber || '',
   });
 
-  const [isSaving,      setIsSaving]      = useState(false);
-  const [uploadingKeys, setUploadingKeys] = useState(new Set());
-  const [merging,       setMerging]       = useState(false); // false | 'keep' | 'delete'
-  const [mergeMessage,  setMergeMessage]  = useState('');
+  const { globalUploadingKeys, handleGlobalUpload, handleGlobalDelete } = useUploadContext();
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [merging, setMerging] = useState(false); // false | 'keep' | 'delete'
+  const [mergeMessage, setMergeMessage] = useState('');
 
   // Local copy of the full consignment document (updated on every upload/delete)
   const [localDoc, setLocalDoc] = useState(detailDoc);
+
+  // Track mount status to safely ignore local state updates if modal is closed
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Keep localDoc in sync if parent detailDoc changes
+  useEffect(() => {
+    setLocalDoc(detailDoc);
+  }, [detailDoc]);
 
   /**
    * Dynamic fields state — shape per tab:
@@ -165,20 +180,20 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
    */
   const [dynamicFields, setDynamicFields] = useState(() => ({
     documents: extractDbDynamicFields('documents', detailDoc.documents),
-    receipts:  extractDbDynamicFields('receipts',  detailDoc.receipts),
+    receipts: extractDbDynamicFields('receipts', detailDoc.receipts),
   }));
 
   // Dropdown + quantity for the "Add More" toolbar (one set per tab)
   const [addDropdown, setAddDropdown] = useState({ documents: '', receipts: '' });
-  const [addQty,      setAddQty]      = useState({ documents: 1,  receipts: 1  });
+  const [addQty, setAddQty] = useState({ documents: 1, receipts: 1 });
 
   // ── Custom Merge Mode ─────────────────────────────────────────────────────────
   // Completely isolated from the standard merge logic.
   // selectedFilesForMerge: [{ key, storagePath, label }, …] — order = click order
-  const [isCustomMergeMode,      setIsCustomMergeMode]      = useState(false);
-  const [selectedFilesForMerge,  setSelectedFilesForMerge]  = useState([]);
-  const [customMerging,          setCustomMerging]          = useState(false);
-  const [customMergeMessage,     setCustomMergeMessage]     = useState('');
+  const [isCustomMergeMode, setIsCustomMergeMode] = useState(false);
+  const [selectedFilesForMerge, setSelectedFilesForMerge] = useState([]);
+  const [customMerging, setCustomMerging] = useState(false);
+  const [customMergeMessage, setCustomMergeMessage] = useState('');
 
   // ── ADDITIVE sync: merge DB-discovered keys into local state on every update ──
   // We NEVER call setDynamicFields with a fresh array — only append new entries.
@@ -206,7 +221,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     try {
       const res = await fetchApi(`/api/consignments/${localDoc._id}`, {
         method: 'PUT',
-        body:   JSON.stringify(form),
+        body: JSON.stringify(form),
       });
       setLocalDoc(res);
       toast.success('تم الحفظ بنجاح');
@@ -218,83 +233,33 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     }
   };
 
-  // ── Upload a PDF file ─────────────────────────────────────────────────────────
-  const handleUpload = useCallback(async (tab, key, file) => {
+  // ── Upload / Delete adapters linking to global UploadContext ───────────────
+  const handleUpload = useCallback((tab, key, file) => {
     if (!localDoc) return;
-    if (file.type !== 'application/pdf') {
-      toast.error('يُقبل فقط ملفات PDF');
-      return;
-    }
-    const uploadKey = `${tab}.${key}`;
-    setUploadingKeys((prev) => new Set(prev).add(uploadKey));
+    return handleGlobalUpload(localDoc._id, tab, key, file, (updatedDoc) => {
+      if (isMountedRef.current) {
+        setLocalDoc(updatedDoc);
+      }
+      onUpdate?.();
+    });
+  }, [localDoc, handleGlobalUpload, onUpdate]);
 
-    try {
-      const storagePath = `${localDoc._id}/${key}.pdf`;
-      const { error } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, file, {
-          contentType: 'application/pdf',
-          upsert: true
-        });
-
-      if (error) throw error;
-
-      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
-      const publicUrl = publicUrlData.publicUrl;
-
-      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
-        method: 'PATCH',
-        body: JSON.stringify({ tab, key, url: publicUrl }),
-      });
-
-      setLocalDoc(data);
-      toast.success(`تم رفع "${file.name}" بنجاح ✅`);
-    } catch (err) {
-      toast.error(`فشل الرفع: ${err.message}`);
-    } finally {
-      setUploadingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(uploadKey);
-        return next;
-      });
-    }
-  }, [localDoc]);
-
-  // ── Delete a file from storage + DB ──────────────────────────────────────────
-  const handleDeleteFile = useCallback(async (tab, key) => {
+  const handleDeleteFile = useCallback((tab, key) => {
     if (!localDoc) return;
-    const uploadKey = `${tab}.${key}`;
-    setUploadingKeys((prev) => new Set(prev).add(uploadKey));
-
-    try {
-      const storagePath = `${localDoc._id}/${key}.pdf`;
-      const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
-      if (error) throw error;
-
-      const data = await fetchApi(`/api/consignments/${localDoc._id}/file`, {
-        method: 'PATCH',
-        body:   JSON.stringify({ tab, key, url: null }),
-      });
-
-      setLocalDoc(data);
-      toast.info('تم حذف الملف');
-    } catch (err) {
-      toast.error(`فشل الحذف: ${err.message}`);
-    } finally {
-      setUploadingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(uploadKey);
-        return next;
-      });
-    }
-  }, [localDoc]);
+    return handleGlobalDelete(localDoc._id, tab, key, (updatedDoc) => {
+      if (isMountedRef.current) {
+        setLocalDoc(updatedDoc);
+      }
+      onUpdate?.();
+    });
+  }, [localDoc, handleGlobalDelete, onUpdate]);
 
   // ── Add one or more dynamic copies of a document type ───────────────────────
   const handleAddField = (tab) => {
     // 'refunds' tab has no upload definitions — do nothing
     if (!TAB_CONFIG[tab]) return;
 
-    const baseKey  = addDropdown[tab];
+    const baseKey = addDropdown[tab];
     const quantity = Math.max(1, Math.min(20, parseInt(addQty[tab], 10) || 1));
 
     if (!baseKey) {
@@ -332,9 +297,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
         if (!takenIndexes.has(cursor)) {
           takenIndexes.add(cursor); // reserve immediately to avoid self-collision
           newEntries.push({
-            key:     `${baseKey}_${cursor}`,
+            key: `${baseKey}_${cursor}`,
             baseKey,
-            label:   `${BASE_KEY_LABEL[baseKey] || baseKey} ${cursor}`,
+            label: `${BASE_KEY_LABEL[baseKey] || baseKey} ${cursor}`,
           });
         }
         cursor++;
@@ -411,19 +376,19 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
     setCustomMergeMessage('جاري تجهيز الملفات المختارة...');
     try {
       // Build filename using the same convention as the standard merge
-      const _fileNum  = localDoc.fileNumber
+      const _fileNum = localDoc.fileNumber
         ? String(localDoc.fileNumber).padStart(4, '0')
         : 'رقم الملف';
-      const _year     = localDoc.createdAt
+      const _year = localDoc.createdAt
         ? new Date(localDoc.createdAt).getFullYear()
         : new Date().getFullYear();
-      const _count    = localDoc.count             || 'العدد';
-      const _supplier = localDoc.supplierName      || 'اسم المورد';
-      const _certNum  = localDoc.certificateNumber || 'رقم الشهاده';
-      const _item     = localDoc.itemName          || 'اسم الصنف';
-      const _port     = localDoc.arrivalPort       || 'ميناء الوصول';
-      const _tabName  = activeTab === 'documents'  ? 'مستندات' : 'ايصالات';
-      const filename  = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_port} - ${_item} ${_tabName} (مخصص).pdf`;
+      const _count = localDoc.count || 'العدد';
+      const _supplier = localDoc.supplierName || 'اسم المورد';
+      const _certNum = localDoc.certificateNumber || 'رقم الشهاده';
+      const _item = localDoc.itemName || 'اسم الصنف';
+      const _port = localDoc.arrivalPort || 'ميناء الوصول';
+      const _tabName = activeTab === 'documents' ? 'مستندات' : 'ايصالات';
+      const filename = `${_fileNum}-${_year} ${_count} ${_supplier} ${_certNum} ${_port} - ${_item} ${_tabName} (مخصص).pdf`;
 
       const success = await customMergeAndDownload(
         selectedFilesForMerge,
@@ -454,9 +419,9 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   // TAB_CONFIG only has entries for 'documents' and 'receipts'.
   // When activeTab === 'refunds', TAB_CONFIG[activeTab] is undefined, so we
   // use optional chaining and fall back to safe empty values to prevent the crash.
-  const currentDefs     = TAB_CONFIG[activeTab]?.defs ?? [];
-  const tabData         = localDoc[activeTab] || {};
-  const accent          = COMPANY_COLOR[localDoc.companyName] || 'slate';
+  const currentDefs = TAB_CONFIG[activeTab]?.defs ?? [];
+  const tabData = localDoc[activeTab] || {};
+  const accent = COMPANY_COLOR[localDoc.companyName] || 'slate';
   const activeDynFields = dynamicFields[activeTab] ?? [];
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -506,15 +471,15 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
               </div>
 
               {[
-                { field: 'acid',                  label: 'ACID',                 mono: true  },
-                { field: 'invoiceSequenceNumber', label: 'رقم تسلسل الفاتورة',  mono: true  },
-                { field: 'consignmentNumber',     label: 'رقم البوليصة',         mono: true  },
-                { field: 'itemName',          label: 'اسم الصنف',        mono: false },
-                { field: 'count',             label: 'العدد',             mono: true  },
-                { field: 'supplierName',      label: 'اسم المورد',       mono: false },
-                { field: 'certificateNumber', label: 'رقم الشهاده',      mono: false },
-                { field: 'arrivalPort',       label: 'ميناء الوصول',     mono: false },
-                { field: 'fileNumber',        label: 'رقم الملف',         mono: false },
+                { field: 'acid', label: 'ACID', mono: true },
+                { field: 'invoiceSequenceNumber', label: 'رقم تسلسل الفاتورة', mono: true },
+                { field: 'consignmentNumber', label: 'رقم البوليصة', mono: true },
+                { field: 'itemName', label: 'اسم الصنف', mono: false },
+                { field: 'count', label: 'العدد', mono: true },
+                { field: 'supplierName', label: 'اسم المورد', mono: false },
+                { field: 'certificateNumber', label: 'رقم الشهاده', mono: false },
+                { field: 'arrivalPort', label: 'ميناء الوصول', mono: false },
+                { field: 'fileNumber', label: 'رقم الملف', mono: false },
               ].map(({ field, label, mono }) => (
                 <div key={field}>
                   <label className="block text-xs text-slate-700 mb-1 font-medium">{label}</label>
@@ -567,115 +532,113 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
 
             {/* Upload grid — only for documents/receipts tabs */}
             {activeTab !== 'refunds' && (
-            <div className="p-4 sm:p-6 bg-slate-50/50 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="p-4 sm:p-6 bg-slate-50/50 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
-                {currentDefs.map((def) => {
-                  const baseUploadKey  = `${activeTab}.${def.key}`;
-                  const isBaseUploading = uploadingKeys.has(baseUploadKey);
-                  const copies = activeDynFields.filter((f) => f.baseKey === def.key);
+                  {currentDefs.map((def) => {
+                    const isBaseUploading = globalUploadingKeys.has(`${localDoc._id}-${activeTab}-${def.key}`);
+                    const copies = activeDynFields.filter((f) => f.baseKey === def.key);
 
-                  return (
-                    <div key={def.key} className="contents">
-                      {/* Base card */}
-                      <UploadCard
-                        label={def.label}
-                        url={tabData[def.key]}
-                        isUploading={isBaseUploading}
-                        onUpload={(file) => handleUpload(activeTab, def.key, file)}
-                        onDelete={() => handleDeleteFile(activeTab, def.key)}
-                        isCustomMergeMode={isCustomMergeMode}
-                        isSelected={selectedFilesForMerge.some((f) => f.key === def.key)}
-                        onToggleSelect={() => handleToggleFileSelect(
-                          def.key,
-                          `${localDoc._id}/${def.key}.pdf`,
-                          def.label,
-                        )}
-                      />
+                    return (
+                      <div key={def.key} className="contents">
+                        {/* Base card */}
+                        <UploadCard
+                          label={def.label}
+                          url={tabData[def.key]}
+                          isUploading={isBaseUploading}
+                          onUpload={(file) => handleUpload(activeTab, def.key, file)}
+                          onDelete={() => handleDeleteFile(activeTab, def.key)}
+                          isCustomMergeMode={isCustomMergeMode}
+                          isSelected={selectedFilesForMerge.some((f) => f.key === def.key)}
+                          onToggleSelect={() => handleToggleFileSelect(
+                            def.key,
+                            `${localDoc._id}/${def.key}.pdf`,
+                            def.label,
+                          )}
+                        />
 
-                      {/* Dynamic copy cards */}
-                      {copies.map((dynField) => {
-                        const dynUploadKey   = `${activeTab}.${dynField.key}`;
-                        const isDynUploading = uploadingKeys.has(dynUploadKey);
-                        return (
-                          <UploadCard
-                            key={dynField.key}
-                            label={dynField.label}
-                            url={tabData[dynField.key]}
-                            isUploading={isDynUploading}
-                            onUpload={(file) => handleUpload(activeTab, dynField.key, file)}
-                            onDelete={() => handleDeleteFile(activeTab, dynField.key)}
-                            onRemove={() => handleRemoveDynamicField(activeTab, dynField)}
-                            isCustomMergeMode={isCustomMergeMode}
-                            isSelected={selectedFilesForMerge.some((f) => f.key === dynField.key)}
-                            onToggleSelect={() => handleToggleFileSelect(
-                              dynField.key,
-                              `${localDoc._id}/${dynField.key}.pdf`,
-                              dynField.label,
-                            )}
-                          />
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                        {/* Dynamic copy cards */}
+                        {copies.map((dynField) => {
+                          const isDynUploading = globalUploadingKeys.has(`${localDoc._id}-${activeTab}-${dynField.key}`);
+                          return (
+                            <UploadCard
+                              key={dynField.key}
+                              label={dynField.label}
+                              url={tabData[dynField.key]}
+                              isUploading={isDynUploading}
+                              onUpload={(file) => handleUpload(activeTab, dynField.key, file)}
+                              onDelete={() => handleDeleteFile(activeTab, dynField.key)}
+                              onRemove={() => handleRemoveDynamicField(activeTab, dynField)}
+                              isCustomMergeMode={isCustomMergeMode}
+                              isSelected={selectedFilesForMerge.some((f) => f.key === dynField.key)}
+                              onToggleSelect={() => handleToggleFileSelect(
+                                dynField.key,
+                                `${localDoc._id}/${dynField.key}.pdf`,
+                                dynField.label,
+                              )}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
 
-              </div>
-
-              {/* ── "Add More" toolbar ───────────────────────────────────── */}
-              <div className="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-200">
-
-                {/* Document type dropdown */}
-                <div className="flex-1 min-w-40">
-                  <label className="block text-xs text-slate-700 font-medium mb-1.5">إضافة نسخة من</label>
-                  <select
-                    value={addDropdown[activeTab]}
-                    onChange={(e) =>
-                      setAddDropdown((prev) => ({ ...prev, [activeTab]: e.target.value }))
-                    }
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  >
-                    <option value="">— اختر النوع —</option>
-                    {currentDefs.map((def) => (
-                      <option key={def.key} value={def.key}>{def.label}</option>
-                    ))}
-                  </select>
                 </div>
 
-                {/* Quantity input */}
-                <div className="w-24 flex-shrink-0">
-                  <label className="block text-xs text-slate-700 font-medium mb-1.5">
-                    <span className="flex items-center gap-1"><Hash size={11} /> الكمية</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={addQty[activeTab]}
-                    onChange={(e) =>
-                      setAddQty((prev) => ({ ...prev, [activeTab]: e.target.value }))
-                    }
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  />
-                </div>
+                {/* ── "Add More" toolbar ───────────────────────────────────── */}
+                <div className="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-200">
 
-                {/* Add button */}
-                <button
-                  type="button"
-                  onClick={() => handleAddField(activeTab)}
-                  className="
+                  {/* Document type dropdown */}
+                  <div className="flex-1 min-w-40">
+                    <label className="block text-xs text-slate-700 font-medium mb-1.5">إضافة نسخة من</label>
+                    <select
+                      value={addDropdown[activeTab]}
+                      onChange={(e) =>
+                        setAddDropdown((prev) => ({ ...prev, [activeTab]: e.target.value }))
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    >
+                      <option value="">— اختر النوع —</option>
+                      {currentDefs.map((def) => (
+                        <option key={def.key} value={def.key}>{def.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quantity input */}
+                  <div className="w-24 flex-shrink-0">
+                    <label className="block text-xs text-slate-700 font-medium mb-1.5">
+                      <span className="flex items-center gap-1"><Hash size={11} /> الكمية</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={addQty[activeTab]}
+                      onChange={(e) =>
+                        setAddQty((prev) => ({ ...prev, [activeTab]: e.target.value }))
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    />
+                  </div>
+
+                  {/* Add button */}
+                  <button
+                    type="button"
+                    onClick={() => handleAddField(activeTab)}
+                    className="
                     flex-shrink-0 flex items-center gap-2 self-end
                     px-4 py-2.5 rounded-xl text-sm font-semibold
                     bg-blue-50 border border-blue-200 text-blue-600
                     hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300
                     transition-all duration-200
                   "
-                >
-                  <PlusCircle size={16} />
-                  إضافة
-                </button>
+                  >
+                    <PlusCircle size={16} />
+                    إضافة
+                  </button>
+                </div>
               </div>
-            </div>
             )}
 
             {/* ── Refund calculations tab ──────────────────────────────────── */}
@@ -689,100 +652,100 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
           {/* Section 3: Merge controls — hidden on the حاسبات tab */}
           {activeTab !== 'refunds' && (<>
 
-          {/* Standard merge progress bar */}
-          {merging && <ProgressBar message={mergeMessage} />}
+            {/* Standard merge progress bar */}
+            {merging && <ProgressBar message={mergeMessage} />}
 
-          {/* Custom merge progress bar */}
-          {customMerging && <ProgressBar message={customMergeMessage} />}
+            {/* Custom merge progress bar */}
+            {customMerging && <ProgressBar message={customMergeMessage} />}
 
-          {/* ── Custom merge mode: selection info bar ──────────────────── */}
-          {isCustomMergeMode && (
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm shadow-sm">
-              <ListChecks size={16} className="text-blue-600 flex-shrink-0" />
-              <span className="text-blue-800 flex-1 font-medium">
-                {selectedFilesForMerge.length === 0
-                  ? 'انقر على الملفات المرفوعة لاختيارها'
-                  : `تم اختيار ${selectedFilesForMerge.length} ملف — سيتم دمجها بهذا الترتيب`
-                }
-              </span>
-              {selectedFilesForMerge.length > 0 && (
+            {/* ── Custom merge mode: selection info bar ──────────────────── */}
+            {isCustomMergeMode && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm shadow-sm">
+                <ListChecks size={16} className="text-blue-600 flex-shrink-0" />
+                <span className="text-blue-800 flex-1 font-medium">
+                  {selectedFilesForMerge.length === 0
+                    ? 'انقر على الملفات المرفوعة لاختيارها'
+                    : `تم اختيار ${selectedFilesForMerge.length} ملف — سيتم دمجها بهذا الترتيب`
+                  }
+                </span>
+                {selectedFilesForMerge.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFilesForMerge([])}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors underline"
+                  >
+                    مسح الاختيار
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Buttons row ────────────────────────────────────────────── */}
+            {!isCustomMergeMode ? (
+              /* Standard mode buttons */
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => handleMerge(false)}
+                  disabled={merging !== false}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
+                >
+                  <Download size={18} />
+                  دمج وتحميل فقط
+                </button>
+                <button
+                  onClick={() => handleMerge(true)}
+                  disabled={merging !== false}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+                >
+                  <Trash2 size={18} />
+                  تحميل + حذف نهائي
+                </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedFilesForMerge([])}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors underline"
-                >
-                  مسح الاختيار
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* ── Buttons row ────────────────────────────────────────────── */}
-          {!isCustomMergeMode ? (
-            /* Standard mode buttons */
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => handleMerge(false)}
-                disabled={merging !== false}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
-              >
-                <Download size={18} />
-                دمج وتحميل فقط
-              </button>
-              <button
-                onClick={() => handleMerge(true)}
-                disabled={merging !== false}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
-              >
-                <Trash2 size={18} />
-                تحميل + حذف نهائي
-              </button>
-              <button
-                type="button"
-                onClick={() => { setIsCustomMergeMode(true); setSelectedFilesForMerge([]); }}
-                disabled={merging !== false}
-                className="
+                  onClick={() => { setIsCustomMergeMode(true); setSelectedFilesForMerge([]); }}
+                  disabled={merging !== false}
+                  className="
                   flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm
                   bg-white border border-slate-300 text-slate-700
                   hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700
                   transition-all disabled:opacity-50 shadow-sm
                 "
-              >
-                <SlidersHorizontal size={16} />
-                دمج ملفات معينة
-              </button>
-            </div>
-          ) : (
-            /* Custom merge mode buttons */
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                onClick={handleCustomMerge}
-                disabled={selectedFilesForMerge.length === 0 || customMerging}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {customMerging
-                  ? <Loader2 size={18} className="animate-spin" />
-                  : <ListChecks size={18} />
-                }
-                دمج الملفات المختارة
-                {selectedFilesForMerge.length > 0 && (
-                  <span className="bg-white/20 text-xs px-2 py-0.5 rounded-full">
-                    {selectedFilesForMerge.length}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setIsCustomMergeMode(false); setSelectedFilesForMerge([]); }}
-                disabled={customMerging}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm disabled:opacity-50"
-              >
-                <XCircle size={16} />
-                إلغاء
-              </button>
-            </div>
-          )}
+                >
+                  <SlidersHorizontal size={16} />
+                  دمج ملفات معينة
+                </button>
+              </div>
+            ) : (
+              /* Custom merge mode buttons */
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleCustomMerge}
+                  disabled={selectedFilesForMerge.length === 0 || customMerging}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {customMerging
+                    ? <Loader2 size={18} className="animate-spin" />
+                    : <ListChecks size={18} />
+                  }
+                  دمج الملفات المختارة
+                  {selectedFilesForMerge.length > 0 && (
+                    <span className="bg-white/20 text-xs px-2 py-0.5 rounded-full">
+                      {selectedFilesForMerge.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsCustomMergeMode(false); setSelectedFilesForMerge([]); }}
+                  disabled={customMerging}
+                  className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <XCircle size={16} />
+                  إلغاء
+                </button>
+              </div>
+            )}
           </>)}
 
         </div>

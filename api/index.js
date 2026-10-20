@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
+const cloudinary = require('./config/cloudinary.js');
 let supabase = null;
 if (!supabaseUrl || !supabaseKey) {
   console.error("FATAL ERROR: Supabase credentials are not set in environment variables.");
@@ -28,6 +28,15 @@ const refundRoutes = require('./_refunds');
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
+
+app.get('/api/cloudinary-sign', (req, res) => {
+  const timestamp = Math.round((new Date).getTime() / 1000);
+  const signature = cloudinary.utils.api_sign_request(
+    { timestamp: timestamp, folder: 'consignments' },
+    process.env.CLOUDINARY_API_SECRET
+  );
+  res.status(200).json({ timestamp, signature });
+});
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
@@ -185,6 +194,49 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
     if (!['receipts', 'documents'].includes(tab))
       return res.status(400).json({ message: 'بيانات غير صحيحة' });
 
+    // ── Secure deletion: when url is null, destroy the existing asset first ──
+    if (url === null || url === undefined) {
+      const existing = await Consignment.findById(req.params.id);
+      if (!existing) return res.status(404).json({ message: 'الشحنة غير موجودة' });
+
+      const existingUrl = existing[tab]?.[key];
+
+      if (existingUrl) {
+        if (existingUrl.includes('cloudinary.com')) {
+          // Extract the public_id from the Cloudinary URL
+          // URL format: .../upload/v1234567890/consignments/filename.pdf
+          try {
+            const afterUpload = existingUrl.split('/upload/')[1];
+            // Strip the optional version segment (v<digits>/)
+            const withoutVersion = afterUpload.replace(/^v\d+\//, '');
+            const publicId = withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+            console.log(`🗑️  Cloudinary asset destroyed: ${publicId}`);
+          } catch (cldErr) {
+            // Non-fatal: log but continue so the DB record is still cleared
+            console.error('⚠️  Cloudinary destroy error (non-fatal):', cldErr.message);
+          }
+        } else if (existingUrl.includes(supabaseUrl)) {
+          // Supabase legacy file — derive the storage path and remove it
+          try {
+            if (supabase) {
+              // Path is everything after /object/public/consignments/
+              const storagePath = existingUrl.split('/object/public/consignments/')[1];
+              if (storagePath) {
+                const { error: sbErr } = await supabase.storage
+                  .from('consignments')
+                  .remove([storagePath]);
+                if (sbErr) console.warn('⚠️  Supabase remove error (non-fatal):', sbErr.message);
+                else console.log(`🗑️  Supabase file removed: ${storagePath}`);
+              }
+            }
+          } catch (sbErr) {
+            console.error('⚠️  Supabase remove error (non-fatal):', sbErr.message);
+          }
+        }
+      }
+    }
+
     const updatePath = `${tab}.${key}`;
     const doc = await Consignment.findByIdAndUpdate(
       req.params.id,
@@ -267,15 +319,23 @@ app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res)
   }
 });
 
+
+
 app.delete('/api/consignments/:id', async (req, res) => {
   try {
     const { password } = req.body;
     if (!password || password !== process.env.DELETE_PASSWORD)
       return res.status(401).json({ message: 'رمز التأكيد غير صحيح' });
 
-    const doc = await Consignment.findByIdAndDelete(req.params.id);
+    // 1. Fetch the document FIRST so we can access the Cloudinary URLs 
+    // before it gets deleted from MongoDB.
+    const doc = await Consignment.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
+    // 2. Delete from MongoDB
+    await Consignment.findByIdAndDelete(req.params.id);
+
+    // 3. Supabase Cleanup (Your exact original code)
     try {
       if (!supabase) throw new Error("Supabase credentials missing on server");
 
@@ -298,12 +358,35 @@ app.delete('/api/consignments/:id', async (req, res) => {
       console.error('⚠️  Supabase cleanup error (non-fatal):', sbErr.message);
     }
 
+    // 4. Cloudinary Cleanup — scan all nested URLs in documents & receipts
+    try {
+      const allUrls = [
+        ...Object.values(doc.documents || {}),
+        ...Object.values(doc.receipts || {}),
+      ].filter((v) => typeof v === 'string' && v.includes('cloudinary.com'));
+
+      for (const fileUrl of allUrls) {
+        try {
+          // URL format: .../upload/v<digits>/consignments/filename.pdf
+          const afterUpload = fileUrl.split('/upload/')[1];
+          const withoutVersion = afterUpload.replace(/^v\d+\//, '');
+          const publicId = withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));
+
+          await cloudinary.uploader.destroy(publicId, { invalidate: true });
+          console.log(`🗑️  Deleted Cloudinary asset: ${publicId}`);
+        } catch (innerErr) {
+          console.warn(`⚠️  Could not destroy Cloudinary asset for URL ${fileUrl}:`, innerErr.message);
+        }
+      }
+    } catch (cldErr) {
+      console.error('⚠️  Cloudinary cleanup error (non-fatal):', cldErr.message);
+    }
+
     res.json({ message: 'تم الحذف بنجاح' });
   } catch (err) {
     res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
   }
 });
-
 // ─── Server bootstrap ─────────────────────────────────────────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
