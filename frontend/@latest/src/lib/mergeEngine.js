@@ -19,6 +19,7 @@ import { PDFDocument } from 'pdf-lib';
 import { supabase, BUCKET } from './supabase';
 import { RECEIPTS, DOCUMENTS } from './fileDefinitions';
 import { fetchApi } from './api';
+import { getSlotUrl } from './fileSlot';
 
 // ─── Tab config map ───────────────────────────────────────────────────────────
 const TAB_CONFIG = {
@@ -29,11 +30,22 @@ const TAB_CONFIG = {
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /**
- * Fetch a PDF using the Supabase SDK to bypass CORS issues.
- * @param {string} storagePath
+ * Fetch a PDF using HTTP fetch (for Cloudinary URLs) or Supabase SDK (for legacy storage paths).
+ * @param {string|object} itemOrPath
  * @returns {Promise<ArrayBuffer>}
  */
-async function fetchPdfBytes(storagePath) {
+async function fetchPdfBytes(itemOrPath) {
+  const url = typeof itemOrPath === 'object'
+    ? itemOrPath.url
+    : (typeof itemOrPath === 'string' && itemOrPath.startsWith('http') ? itemOrPath : null);
+
+  if (url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP fetch error (${res.status}) for ${url}`);
+    return await res.arrayBuffer();
+  }
+
+  const storagePath = typeof itemOrPath === 'object' ? itemOrPath.storagePath : itemOrPath;
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .download(storagePath);
@@ -82,10 +94,12 @@ function buildMergeList(consignmentId, tabData, baseDefs, dynamicFields) {
 
   for (const def of baseDefs) {
     // 1. Base slot
-    if (tabData[def.key]) {
+    const baseSlotUrl = getSlotUrl(tabData[def.key]);
+    if (baseSlotUrl) {
       list.push({
         key:         def.key,
         label:       def.label,
+        url:         baseSlotUrl,
         storagePath: `${consignmentId}/${def.key}.pdf`,
       });
     }
@@ -100,10 +114,12 @@ function buildMergeList(consignmentId, tabData, baseDefs, dynamicFields) {
       });
 
     for (const copy of copies) {
-      if (tabData[copy.key]) {
+      const copySlotUrl = getSlotUrl(tabData[copy.key]);
+      if (copySlotUrl) {
         list.push({
           key:         copy.key,
           label:       copy.label,
+          url:         copySlotUrl,
           storagePath: `${consignmentId}/${copy.key}.pdf`,
         });
       }
@@ -167,7 +183,7 @@ export async function mergeAndDownload(
 
   for (const item of mergeList) {
     try {
-      const bytes  = await fetchPdfBytes(item.storagePath);
+      const bytes  = await fetchPdfBytes(item);
       const srcPdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
       const copied = await masterPdf.copyPages(srcPdf, srcPdf.getPageIndices());
       copied.forEach((page) => masterPdf.addPage(page));
@@ -260,7 +276,7 @@ export async function customMergeAndDownload(selectedFiles, filename, onProgress
 
   for (const item of selectedFiles) {
     try {
-      const bytes  = await fetchPdfBytes(item.storagePath);
+      const bytes  = await fetchPdfBytes(item);
       const srcPdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
       const copied = await masterPdf.copyPages(srcPdf, srcPdf.getPageIndices());
       copied.forEach((page) => masterPdf.addPage(page));

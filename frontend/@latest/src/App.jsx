@@ -30,11 +30,17 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
+  LogOut,
+  Users,
 } from 'lucide-react';
 
 import ConsignmentHeader from './components/ConsignmentHeader';
 import ConsignmentDetailModal from './components/ConsignmentDetailModal';
 import RefundsDashboard from './components/RefundsDashboard';
+import AuthPage from './components/AuthPage';
+import UsersManagement from './components/UsersManagement';
+import FileUploadsSummary from './components/FileUploadsSummary';
+import { useAuth } from './lib/AuthContext';
 import { fetchApi } from './lib/api';
 import { COMPANIES, COMPANY_COLOR } from './lib/constants';
 
@@ -54,7 +60,12 @@ const SEARCH_TYPES = [
 
 const PAGE_LIMIT = 10;
 
-export default function App() {
+function MainApp() {
+  // ── Auth / navigation state ─────────────────────────────────────────────────
+  const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [view, setView] = useState('registry'); // 'registry' | 'users'
+
   // ── Search state ────────────────────────────────────────────────────────────
   const [searchType,  setSearchType]  = useState(SEARCH_TYPES[0].key);
   const [searchValue, setSearchValue] = useState('');
@@ -199,8 +210,6 @@ export default function App() {
     <>
     <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-800 font-[Tajawal,sans-serif]">
 
-      <ToastContainer position="bottom-left" rtl pauseOnHover closeOnClick newestOnTop />
-
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -235,11 +244,60 @@ export default function App() {
             </button>
             <FileStack size={16} className="text-slate-400" />
             <span className="text-sm text-slate-400 hidden sm:inline">سجل الشحنات</span>
+
+            {/* Logged-in user + logout */}
+            <div className="flex items-center gap-2 ps-3 ms-1 border-s border-slate-200">
+              <div className="text-right leading-tight hidden sm:block">
+                <p className="text-xs font-bold text-slate-700">{user?.username}</p>
+                <span className={`inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border
+                  ${isAdmin ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  {isAdmin ? 'مدير النظام' : 'مستخدم'}
+                </span>
+              </div>
+              <button
+                type="button"
+                id="btn-logout"
+                onClick={logout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all"
+              >
+                <LogOut size={14} />
+                <span className="hidden sm:inline">تسجيل الخروج</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* ── Main ───────────────────────────────────────────────────────────── */}
+      {/* ── Admin-only navigation tabs ─────────────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className="max-w-6xl mx-auto px-4 pt-6">
+          <div className="inline-flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm gap-1">
+            {[
+              { id: 'registry', label: 'سجل الشحنات', icon: FileStack },
+              { id: 'users', label: 'إدارة المستخدمين', icon: Users },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                id={`tab-${id}`}
+                onClick={() => setView(id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all
+                  ${view === id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Users management (admin only) ─────────────────────────────────────────── */}
+      {isAdmin && view === 'users' ? (
+        <main className="max-w-6xl mx-auto px-4 py-8">
+          <UsersManagement />
+        </main>
+      ) : (
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
         {/* Page title */}
@@ -454,6 +512,9 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Uploaded files summary */}
+                  <FileUploadsSummary doc={doc} />
+
                   {/* Bottom row: view hint + delete button */}
                   <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
                     <span className="flex items-center gap-1 text-xs text-slate-500 group-hover:text-blue-600 transition-colors">
@@ -550,6 +611,7 @@ export default function App() {
           </>
         )}
       </main>
+      )}
 
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {detailDoc && (
@@ -661,6 +723,26 @@ export default function App() {
         }}
       />
     )}
+    </>
+  );
+}
+
+// ─── Auth gate ──────────────────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  const { user, loading } = useAuth();
+
+  return (
+    <>
+      <ToastContainer position="bottom-left" rtl pauseOnHover closeOnClick newestOnTop />
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <Loader2 size={28} className="animate-spin text-blue-600" />
+        </div>
+      ) : user ? (
+        <MainApp />
+      ) : (
+        <AuthPage />
+      )}
     </>
   );
 }

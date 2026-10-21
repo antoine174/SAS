@@ -21,6 +21,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Consignment = require('./models/Consignment');
+const User = require('./models/User');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
 
 // ✅ FIX 2: Point to the correctly renamed hidden Vercel file
@@ -37,8 +40,100 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ─── Cloudinary Signature Route ───────────────────────────────────────────────
-app.post('/api/cloudinary-sign', (req, res) => {
+
+// ─── Auth constants & admin seeding ───────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'sas_fallback_secret_2026';
+const SEED_ADMIN_EMAIL = 'sobhyantoine@gmail.com';
+
+const signToken = (user) =>
+  jwt.sign(
+    { id: user._id.toString(), username: user.username, role: user.role, email: user.email },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
+
+const publicUser = (u) => ({ _id: u._id, username: u.username, email: u.email, role: u.role });
+
+async function seedAdmin() {
+  try {
+    const existing = await User.findOne({ email: SEED_ADMIN_EMAIL });
+    if (!existing) {
+      const hashed = await bcrypt.hash('753951', 10);
+      await User.create({
+        username: 'انطوان صبحي سليمان',
+        email: SEED_ADMIN_EMAIL,
+        password: hashed,
+        role: 'admin',
+      });
+      console.log('🌱  Seed admin created');
+    } else if (existing.role !== 'admin') {
+      existing.role = 'admin';
+      await existing.save();
+      console.log('🌱  Seed admin role restored');
+    }
+  } catch (err) {
+    console.error('⚠️  seedAdmin error (non-fatal):', err.message);
+  }
+}
+
+// ─── MongoDB Connection ───────────────────────────────────────────────────────
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(async () => {
+    console.log('✅  MongoDB connected');
+    await mongoose.connection.db
+      .collection('consignments')
+      .dropIndex('billId_1_companyName_1')
+      .catch(() => { });
+    await seedAdmin();
+  })
+  .catch((err) => {
+    console.error('❌  MongoDB error:', err);
+  });
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Backend is alive' });
+});
+
+// ─── Auth middleware ──────────────────────────────────────────────────────────
+// Verifies the Bearer JWT and exposes a trusted identity on req.user:
+//   { _id, id, username, role, email }
+// Tokens issued before usernames were embedded fall back to one DB lookup, so the
+// uploader identity is ALWAYS derived server-side and never from the request body.
+const requireAuth = async (req, res, next) => {
+  const header = req.headers.authorization || '';
+  const [scheme, token] = header.split(' ');
+  if (scheme !== 'Bearer' || !token) return res.status(401).json({ message: 'غير مصرح' });
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ message: 'الجلسة منتهية، يرجى تسجيل الدخول مجدداً' });
+  }
+
+  try {
+    if (!decoded.username) {
+      const dbUser = await User.findById(decoded.id).select('username role email');
+      if (!dbUser) return res.status(401).json({ message: 'المستخدم غير موجود' });
+      decoded = { ...decoded, username: dbUser.username, role: dbUser.role, email: dbUser.email };
+    }
+    req.user = { ...decoded, _id: decoded.id };
+    next();
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+};
+
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ message: 'صلاحيات المدير مطلوبة' });
+  next();
+};
+
+// ─── Cloudinary Signature Route (auth required) ───────────────────────────────
+app.post('/api/cloudinary-sign', requireAuth, (req, res) => {
   const clean = (str) => (str ? String(str).replace(/[|=]/g, '') : 'N/A');
   const { acid, label, companyName, supplierName, certificateNumber, arrivalPort } = req.body || {};
 
@@ -49,7 +144,7 @@ app.post('/api/cloudinary-sign', (req, res) => {
 
   if (acid && label) {
     paramsToSign.public_id = `${clean(acid)}_${clean(label)}_${paramsToSign.timestamp}`;
-    paramsToSign.context = `acid=${clean(acid)}|label=${clean(label)}|company=${clean(companyName)}|supplier=${clean(supplierName)}|certificate=${clean(certificateNumber)}|port=${clean(arrivalPort)}`;
+    paramsToSign.context = `acid=${clean(acid)}|label=${clean(label)}|company=${clean(companyName)}|supplier=${clean(supplierName)}|certificate=${clean(certificateNumber)}|port=${clean(arrivalPort)}|uploader=${clean(req.user.username)}`;
   }
 
   const signature = cloudinary.utils.api_sign_request(
@@ -65,28 +160,117 @@ app.post('/api/cloudinary-sign', (req, res) => {
   });
 });
 
-// ─── MongoDB Connection ───────────────────────────────────────────────────────
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log('✅  MongoDB connected');
-    await mongoose.connection.db
-      .collection('consignments')
-      .dropIndex('billId_1_companyName_1')
-      .catch(() => { });
-  })
-  .catch((err) => {
-    console.error('❌  MongoDB error:', err);
-  });
+// ─── Auth routes ──────────────────────────────────────────────────────────────
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { username, email, password } = req.body || {};
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+    if (!User.isValidArabicFullName(username))
+      return res.status(400).json({ message: 'الاسم يجب أن يكون ثلاثي باللغة العربية (مثال: انطوان صبحي سليمان)' });
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string')
+      return res.status(400).json({ message: 'البريد الإلكتروني وكلمة المرور مطلوبان' });
+    if (password.length < 6)
+      return res.status(400).json({ message: 'كلمة المرور يجب ألا تقل عن 6 أحرف' });
 
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Backend is alive' });
+    const normalizedEmail = email.trim().toLowerCase();
+    if (await User.findOne({ email: normalizedEmail }))
+      return res.status(400).json({ message: 'البريد الإلكتروني مسجل بالفعل' });
+
+    const hashed = await bcrypt.hash(password, 10);
+    // role is ALWAYS 'user' on signup — never taken from the request body
+    const user = await User.create({
+      username: username.trim().replace(/\s+/g, ' '),
+      email: normalizedEmail,
+      password: hashed,
+      role: 'user',
+    });
+
+    res.status(201).json({ token: signToken(user), user: publicUser(user) });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ message: 'البريد الإلكتروني مسجل بالفعل' });
+    if (err.name === 'ValidationError')
+      return res.status(400).json({ message: Object.values(err.errors).map((e) => e.message).join(' | ') });
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string')
+      return res.status(400).json({ message: 'البريد الإلكتروني وكلمة المرور مطلوبان' });
+
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const ok = user && (await bcrypt.compare(password, user.password));
+    if (!ok) return res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
+
+    res.json({ token: signToken(user), user: publicUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(401).json({ message: 'المستخدم غير موجود' });
+    res.json(publicUser(user));
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+// ─── Admin user-management routes ─────────────────────────────────────────────
+app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+app.patch('/api/users/:id/password', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { newPassword } = req.body || {};
+    if (!newPassword || typeof newPassword !== 'string' || !newPassword.trim())
+      return res.status(400).json({ message: 'كلمة المرور الجديدة مطلوبة' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: { password: hashed } }, { new: true });
+    if (!user) return res.status(404).json({ message: 'المستخدم غير موجود' });
+    res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+app.patch('/api/users/:id/role', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { role } = req.body || {};
+    if (!['admin', 'user'].includes(role))
+      return res.status(400).json({ message: 'صلاحية غير صحيحة' });
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'المستخدم غير موجود' });
+    if (target.email === SEED_ADMIN_EMAIL && role !== 'admin')
+      return res.status(400).json({ message: 'لا يمكن إلغاء صلاحية المدير الأساسي' });
+
+    target.role = role;
+    await target.save();
+    res.json(publicUser(target));
+  } catch (err) {
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
 });
 
 // ─── Refunds router ───────────────────────────────────────────────────────────
-app.use('/api/refunds', refundRoutes);
+// Every refunds route requires a valid JWT
+app.use('/api/refunds', requireAuth, refundRoutes);
+
+// Every /api/consignments* route (all methods, all sub-paths) requires a valid JWT.
+// Registered before the individual consignment routes below.
+app.use('/api/consignments', requireAuth);
 
 app.get('/api/consignments', async (req, res) => {
   try {
@@ -212,13 +396,20 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
 
     if (!['receipts', 'documents'].includes(tab))
       return res.status(400).json({ message: 'بيانات غير صحيحة' });
+    if (!/^[A-Za-z0-9_]+$/.test(String(key)))
+      return res.status(400).json({ message: 'بيانات غير صحيحة' });
+
+    const isDelete = url === null || url === undefined;
+    if (!isDelete && (typeof url !== 'string' || !url.trim()))
+      return res.status(400).json({ message: 'بيانات غير صحيحة' });
 
     // ── Secure deletion: when url is null, destroy the existing asset first ──
-    if (url === null || url === undefined) {
+    if (isDelete) {
       const existing = await Consignment.findById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-      const existingUrl = existing[tab]?.[key];
+      // Slot may be a legacy string OR a { url, uploadedBy, ... } object
+      const existingUrl = Consignment.getSlotUrl(existing[tab]?.[key]);
 
       if (existingUrl) {
         if (existingUrl.includes('cloudinary.com')) {
@@ -229,7 +420,9 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
             // Strip the optional version segment (v<digits>/)
             const withoutVersion = afterUpload.replace(/^v\d+\//, '');
             const publicId = withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));
-            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+            // PDFs go through /auto/upload and are stored as Cloudinary "image" assets,
+            // so destroy with the default resource type (same as the consignment-delete path).
+            await cloudinary.uploader.destroy(publicId, { invalidate: true });
             console.log(`🗑️  Cloudinary asset destroyed: ${publicId}`);
           } catch (cldErr) {
             // Non-fatal: log but continue so the DB record is still cleared
@@ -256,10 +449,14 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
       }
     }
 
+    // Upload → stamp the uploader from the VERIFIED JWT (req.user). Any uploadedBy /
+    // uploadedById sent by the client is ignored. Delete → clear the slot.
+    const slotValue = isDelete ? null : Consignment.buildFileSlot(url.trim(), req.user);
+
     const updatePath = `${tab}.${key}`;
     const doc = await Consignment.findByIdAndUpdate(
       req.params.id,
-      { $set: { [updatePath]: url } },
+      { $set: { [updatePath]: slotValue } },
       { new: true },
     );
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
@@ -288,8 +485,8 @@ app.patch('/api/consignments/:id/cleanup', async (req, res) => {
     );
     if (!doc) return res.status(404).json({ message: 'الشحنة غير موجودة' });
 
-    const receiptsEmpty = Object.keys(doc.receipts || {}).length === 0 || Object.values(doc.receipts || {}).every((v) => !v);
-    const documentsEmpty = Object.keys(doc.documents || {}).length === 0 || Object.values(doc.documents || {}).every((v) => !v);
+    const receiptsEmpty = Object.keys(doc.receipts || {}).length === 0 || Object.values(doc.receipts || {}).every((v) => !Consignment.getSlotUrl(v));
+    const documentsEmpty = Object.keys(doc.documents || {}).length === 0 || Object.values(doc.documents || {}).every((v) => !Consignment.getSlotUrl(v));
 
     if (receiptsEmpty && documentsEmpty) {
       await Consignment.findByIdAndDelete(req.params.id);
@@ -326,7 +523,7 @@ app.post('/api/consignments/:id/upload', upload.single('file'), async (req, res)
     const updatePath = `${tab}.${key}`;
     const doc = await Consignment.findByIdAndUpdate(
       id,
-      { $set: { [updatePath]: publicUrl } },
+      { $set: { [updatePath]: Consignment.buildFileSlot(publicUrl, req.user) } },
       { new: true }
     );
 
@@ -382,7 +579,9 @@ app.delete('/api/consignments/:id', async (req, res) => {
       const allUrls = [
         ...Object.values(doc.documents || {}),
         ...Object.values(doc.receipts || {}),
-      ].filter((v) => typeof v === 'string' && v.includes('cloudinary.com'));
+      ]
+        .map((slot) => Consignment.getSlotUrl(slot)) // legacy string OR { url, ... } object
+        .filter((v) => typeof v === 'string' && v.includes('cloudinary.com'));
 
       for (const fileUrl of allUrls) {
         try {

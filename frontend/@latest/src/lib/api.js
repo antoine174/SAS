@@ -9,9 +9,20 @@ export const fetchApi = async (url, options = {}) => {
     headers['Content-Type'] = 'application/json';
   }
 
+  // Auto-attach JWT when the user is logged in
+  const token = localStorage.getItem('sas_token');
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const response = await fetch(url, { ...options, headers });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      const err = new Error(`HTTP error! status: ${response.status}`);
+      err.status = response.status;
+      try { err.data = await response.json(); } catch { err.data = null; }
+      throw err;
+    }
     return await response.json();
   } catch (error) {
     console.error("API Error:", error);
@@ -27,11 +38,22 @@ export const uploadDirectToCloudinary = async (file, metadata = {}) => {
       ? { acid: metadata, label: arguments[2] }
       : (metadata || {});
 
+    const token = localStorage.getItem('sas_token');
     const signResponse = await fetch('/api/cloudinary-sign', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
+    if (!signResponse.ok) {
+      throw new Error(
+        signResponse.status === 401
+          ? 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً'
+          : `Signature request failed (status ${signResponse.status})`
+      );
+    }
     const { signature, timestamp, context, public_id } = await signResponse.json();
 
     // 2. Prepare the payload for Cloudinary

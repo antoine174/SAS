@@ -44,6 +44,7 @@ import { RECEIPTS, DOCUMENTS } from '../lib/fileDefinitions';
 import { supabase, BUCKET } from '../lib/supabase';
 import { mergeAndDownload, customMergeAndDownload } from '../lib/mergeEngine';
 import { COMPANIES, COMPANY_COLOR } from '../lib/constants';
+import { getSlotMeta, getSlotUrl } from '../lib/fileSlot';
 
 // ─── Tab configuration ────────────────────────────────────────────────────────
 
@@ -322,7 +323,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   const handleRemoveDynamicField = useCallback(async (tab, dynField) => {
     // If a file was uploaded for this dynamic slot, delete it first
     const tabData = localDoc[tab] || {};
-    if (tabData[dynField.key]) {
+    if (getSlotUrl(tabData[dynField.key])) {
       await handleDeleteFile(tab, dynField.key);
     }
 
@@ -369,11 +370,11 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   };
 
   // ── Toggle a file in/out of the custom merge selection ───────────────────────
-  const handleToggleFileSelect = useCallback((key, storagePath, label) => {
+  const handleToggleFileSelect = useCallback((key, storagePath, label, url) => {
     setSelectedFilesForMerge((prev) => {
       const exists = prev.some((f) => f.key === key);
       if (exists) return prev.filter((f) => f.key !== key);
-      return [...prev, { key, storagePath, label }];
+      return [...prev, { key, storagePath, label, url }];
     });
   }, []);
 
@@ -546,13 +547,17 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                   {currentDefs.map((def) => {
                     const isBaseUploading = globalUploadingKeys.has(`${localDoc._id}-${activeTab}-${def.key}`);
                     const copies = activeDynFields.filter((f) => f.baseKey === def.key);
+                    const baseMeta = getSlotMeta(tabData[def.key]);
 
                     return (
                       <div key={def.key} className="contents">
                         {/* Base card */}
                         <UploadCard
                           label={def.label}
-                          url={tabData[def.key]}
+                          url={baseMeta?.url || null}
+                          uploadedBy={baseMeta?.uploadedBy}
+                          uploaderKnown={baseMeta?.known}
+                          uploadedAt={baseMeta?.uploadedAt}
                           isUploading={isBaseUploading}
                           onUpload={(file) => handleUpload(activeTab, def.key, file, def.label)}
                           onDelete={() => handleDeleteFile(activeTab, def.key)}
@@ -562,17 +567,22 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                             def.key,
                             `${localDoc._id}/${def.key}.pdf`,
                             def.label,
+                            baseMeta?.url,
                           )}
                         />
 
                         {/* Dynamic copy cards */}
                         {copies.map((dynField) => {
                           const isDynUploading = globalUploadingKeys.has(`${localDoc._id}-${activeTab}-${dynField.key}`);
+                          const dynMeta = getSlotMeta(tabData[dynField.key]);
                           return (
                             <UploadCard
                               key={dynField.key}
                               label={dynField.label}
-                              url={tabData[dynField.key]}
+                              url={dynMeta?.url || null}
+                              uploadedBy={dynMeta?.uploadedBy}
+                              uploaderKnown={dynMeta?.known}
+                              uploadedAt={dynMeta?.uploadedAt}
                               isUploading={isDynUploading}
                               onUpload={(file) => handleUpload(activeTab, dynField.key, file, dynField.label)}
                               onDelete={() => handleDeleteFile(activeTab, dynField.key)}
@@ -583,6 +593,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                                 dynField.key,
                                 `${localDoc._id}/${dynField.key}.pdf`,
                                 dynField.label,
+                                dynMeta?.url,
                               )}
                             />
                           );

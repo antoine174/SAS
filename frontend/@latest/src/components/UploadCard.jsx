@@ -28,7 +28,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-export default function UploadCard({ label, url, isUploading, onUpload, onDelete, onRemove, isCustomMergeMode, isSelected, onToggleSelect }) {
+export default function UploadCard({ label, url, isUploading, onUpload, onDelete, onRemove, isCustomMergeMode, isSelected, onToggleSelect, uploadedBy, uploaderKnown = true, uploadedAt }) {
   const inputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -38,8 +38,13 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
     e.target.value = '';
   };
 
-  // ── Derived state ──────────────────────────────────────────────────────────
-  const uploaded = !!url;
+  // Handle both string URLs and slot objects { url, uploadedBy, uploadedAt }
+  const fileUrl = typeof url === 'object' && url !== null ? url.url : url;
+  const fileUploadedBy = uploadedBy ?? (typeof url === 'object' && url !== null ? url.uploadedBy : null);
+  const fileUploadedAt = uploadedAt ?? (typeof url === 'object' && url !== null ? url.uploadedAt : null);
+  const fileUploaderKnown = uploaderKnown && fileUploadedBy !== 'مستخدم غير معروف';
+
+  const uploaded = !!fileUrl;
 
   let borderClass = '';
   let bgClass     = '';
@@ -78,7 +83,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
   // In custom merge mode: uploaded cards get a selection ring, empty cards dim out
   let modeOverride = {};
   if (isCustomMergeMode) {
-    if (url && !isUploading) {
+    if (fileUrl && !isUploading) {
       // Selectable: blue ring when selected, dashed slate when not
       modeOverride = {
         borderClass: isSelected
@@ -101,7 +106,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
   // Click handler: in custom merge mode on an uploaded card → toggle selection
   const handleCardClick = () => {
     if (isCustomMergeMode) {
-      if (url && !isUploading && onToggleSelect) onToggleSelect();
+      if (fileUrl && !isUploading && onToggleSelect) onToggleSelect();
       return;
     }
     if (!isUploading) inputRef.current?.click();
@@ -114,7 +119,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
         relative flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all duration-300
         shadow-lg ${borderClass} ${bgClass}
         ${isCustomMergeMode
-          ? (url && !isUploading ? 'cursor-pointer hover:scale-[1.02] hover:shadow-xl' : '')
+          ? (fileUrl && !isUploading ? 'cursor-pointer hover:scale-[1.02] hover:shadow-xl' : '')
           : (!isUploading ? 'hover:scale-[1.02] hover:shadow-xl cursor-pointer' : '')
         }
         ${modeOverride.dimmed ? 'opacity-30 pointer-events-none' : ''}
@@ -132,7 +137,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
       />
 
       {/* ── Custom merge mode: checkbox overlay ─────────────────────────── */}
-      {isCustomMergeMode && url && !isUploading && (
+      {isCustomMergeMode && fileUrl && !isUploading && (
         <div
           className={`
             absolute top-2 right-2 z-10
@@ -177,6 +182,14 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
             {label}
           </p>
           <div className="mt-1.5">{statusBadge}</div>
+          {uploaded && !isUploading && fileUploadedBy && (
+            <p
+              className={`mt-1.5 text-[11px] leading-snug ${fileUploaderKnown ? 'text-slate-600' : 'text-slate-400 italic'}`}
+              title={fileUploadedAt ? new Date(fileUploadedAt).toLocaleString('ar-EG') : undefined}
+            >
+              رفع بواسطة: <span className="font-semibold">{fileUploadedBy}</span>
+            </p>
+          )}
         </div>
         <div className="flex-shrink-0 mt-0.5">{iconEl}</div>
       </div>
@@ -188,7 +201,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
             <>
               {/* View link */}
               <a
-                href={url}
+                href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
@@ -228,7 +241,7 @@ export default function UploadCard({ label, url, isUploading, onUpload, onDelete
       )}
 
       {/* In custom merge mode: show a minimal "tap to select" hint on uploaded cards */}
-      {isCustomMergeMode && url && !isUploading && (
+      {isCustomMergeMode && fileUrl && !isUploading && (
         <div className="mt-auto pt-2 border-t border-slate-200 text-xs text-center font-medium transition-colors duration-200">
           {isSelected
             ? <span className="text-blue-600">✓ تم الاختيار</span>
