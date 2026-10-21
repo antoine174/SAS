@@ -234,9 +234,17 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
   };
 
   // ── Upload / Delete adapters linking to global UploadContext ───────────────
-  const handleUpload = useCallback((tab, key, file) => {
+  const handleUpload = useCallback((tab, key, file, label) => {
     if (!localDoc) return;
-    return handleGlobalUpload(localDoc._id, tab, key, file, (updatedDoc) => {
+    const metadata = {
+      acid: localDoc.acid,
+      label,
+      companyName: localDoc.companyName,
+      supplierName: localDoc.supplierName,
+      certificateNumber: localDoc.certificateNumber,
+      arrivalPort: localDoc.arrivalPort,
+    };
+    return handleGlobalUpload(localDoc._id, tab, key, file, metadata, (updatedDoc) => {
       if (isMountedRef.current) {
         setLocalDoc(updatedDoc);
       }
@@ -546,7 +554,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                           label={def.label}
                           url={tabData[def.key]}
                           isUploading={isBaseUploading}
-                          onUpload={(file) => handleUpload(activeTab, def.key, file)}
+                          onUpload={(file) => handleUpload(activeTab, def.key, file, def.label)}
                           onDelete={() => handleDeleteFile(activeTab, def.key)}
                           isCustomMergeMode={isCustomMergeMode}
                           isSelected={selectedFilesForMerge.some((f) => f.key === def.key)}
@@ -566,7 +574,7 @@ export default function ConsignmentDetailModal({ detailDoc, closeDetail, openDel
                               label={dynField.label}
                               url={tabData[dynField.key]}
                               isUploading={isDynUploading}
-                              onUpload={(file) => handleUpload(activeTab, dynField.key, file)}
+                              onUpload={(file) => handleUpload(activeTab, dynField.key, file, dynField.label)}
                               onDelete={() => handleDeleteFile(activeTab, dynField.key)}
                               onRemove={() => handleRemoveDynamicField(activeTab, dynField)}
                               isCustomMergeMode={isCustomMergeMode}

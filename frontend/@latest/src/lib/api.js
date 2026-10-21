@@ -20,11 +20,19 @@ export const fetchApi = async (url, options = {}) => {
   }
 };
 
-export const uploadDirectToCloudinary = async (file) => {
+export const uploadDirectToCloudinary = async (file, metadata = {}) => {
   try {
-    // 1. Get the secure signature from your backend
-    const signResponse = await fetch('/api/cloudinary-sign');
-    const { signature, timestamp } = await signResponse.json();
+    // 1. Get the secure signature from your backend via POST with JSON metadata
+    const payload = typeof metadata === 'string'
+      ? { acid: metadata, label: arguments[2] }
+      : (metadata || {});
+
+    const signResponse = await fetch('/api/cloudinary-sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const { signature, timestamp, context, public_id } = await signResponse.json();
 
     // 2. Prepare the payload for Cloudinary
     const formData = new FormData();
@@ -33,6 +41,8 @@ export const uploadDirectToCloudinary = async (file) => {
     formData.append('timestamp', timestamp);
     formData.append('signature', signature);
     formData.append('folder', 'consignments');
+    if (context) formData.append('context', context);
+    if (public_id) formData.append('public_id', public_id);
 
     // 3. Upload directly to Cloudinary
     const uploadUrl = `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`;

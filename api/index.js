@@ -29,15 +29,6 @@ const refundRoutes = require('./_refunds');
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
-app.get('/api/cloudinary-sign', (req, res) => {
-  const timestamp = Math.round((new Date).getTime() / 1000);
-  const signature = cloudinary.utils.api_sign_request(
-    { timestamp: timestamp, folder: 'consignments' },
-    process.env.CLOUDINARY_API_SECRET
-  );
-  res.status(200).json({ timestamp, signature });
-});
-
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
   origin: '*',
@@ -45,6 +36,34 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
+
+// ─── Cloudinary Signature Route ───────────────────────────────────────────────
+app.post('/api/cloudinary-sign', (req, res) => {
+  const clean = (str) => (str ? String(str).replace(/[|=]/g, '') : 'N/A');
+  const { acid, label, companyName, supplierName, certificateNumber, arrivalPort } = req.body || {};
+
+  const paramsToSign = {
+    timestamp: Math.round((new Date).getTime() / 1000),
+    folder: 'consignments',
+  };
+
+  if (acid && label) {
+    paramsToSign.public_id = `${clean(acid)}_${clean(label)}_${paramsToSign.timestamp}`;
+    paramsToSign.context = `acid=${clean(acid)}|label=${clean(label)}|company=${clean(companyName)}|supplier=${clean(supplierName)}|certificate=${clean(certificateNumber)}|port=${clean(arrivalPort)}`;
+  }
+
+  const signature = cloudinary.utils.api_sign_request(
+    paramsToSign,
+    process.env.CLOUDINARY_API_SECRET
+  );
+
+  res.status(200).json({
+    timestamp: paramsToSign.timestamp,
+    signature,
+    context: paramsToSign.context,
+    public_id: paramsToSign.public_id,
+  });
+});
 
 // ─── MongoDB Connection ───────────────────────────────────────────────────────
 mongoose

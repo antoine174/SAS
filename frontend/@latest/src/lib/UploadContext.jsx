@@ -10,19 +10,28 @@ export function UploadProvider({ children }) {
   const [globalUploadingKeys, setGlobalUploadingKeys] = useState(new Set());
 
   // ── Global Upload Handler ────────────────────────────────────────────────────
-  const handleGlobalUpload = useCallback(async (consignmentId, tab, key, file, onSuccess) => {
+  const handleGlobalUpload = useCallback(async (consignmentId, tab, key, file, metadata, ...rest) => {
     if (!file) return null;
     if (file.type !== 'application/pdf') {
       toast.error('يُقبل فقط ملفات PDF');
       return null;
     }
 
+    let payload = metadata;
+    let onSuccess = rest[0];
+
+    // Support legacy (acid, label, onSuccess) invocation
+    if (typeof metadata === 'string') {
+      payload = { acid: metadata, label: rest[0] };
+      onSuccess = rest[1];
+    }
+
     const uploadKey = `${consignmentId}-${tab}-${key}`;
     setGlobalUploadingKeys((prev) => new Set(prev).add(uploadKey));
 
     const uploadPromise = (async () => {
-      // 1. Upload file directly to Cloudinary
-      const publicUrl = await uploadDirectToCloudinary(file);
+      // 1. Upload file directly to Cloudinary with full context metadata
+      const publicUrl = await uploadDirectToCloudinary(file, payload);
 
       // 2. Persist new Cloudinary URL to MongoDB
       const updatedDoc = await fetchApi(`/api/consignments/${consignmentId}/file`, {
