@@ -11,10 +11,34 @@ if (!supabaseUrl || !supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
 
-// ✅ FIX 1: Wrap DNS hack so it ONLY runs locally, NEVER on Vercel.
+// ✅ FIX 1: On Vercel, SRV URI works fine. Locally, if UDP port 53 is blocked
+// (common on some networks), set MONGODB_LOCAL_URI in .env to a direct
+// standard (non-SRV) connection string to bypass the TXT DNS lookup.
 if (!process.env.VERCEL) {
   const dns = require('dns');
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
+  try {
+    const fs = require('fs');
+    const routes = fs.readFileSync('/proc/net/route', 'utf8').split('\n');
+    let gateway = null;
+    for (const line of routes) {
+      const parts = line.trim().split(/\s+/);
+      if (parts[1] === '00000000' && parts[2]) {
+        const hex = parts[2];
+        gateway = [
+          parseInt(hex.substr(6, 2), 16),
+          parseInt(hex.substr(4, 2), 16),
+          parseInt(hex.substr(2, 2), 16),
+          parseInt(hex.substr(0, 2), 16),
+        ].join('.');
+        break;
+      }
+    }
+    const current = dns.getServers();
+    const servers = gateway ? [gateway, ...current.filter((s) => s !== gateway)] : current;
+    if (servers.length) dns.setServers(servers);
+  } catch {
+    // Keep default resolver
+  }
 }
 
 const express = require('express');
@@ -77,8 +101,12 @@ async function seedAdmin() {
 }
 
 // ─── MongoDB Connection ───────────────────────────────────────────────────────
+const mongoUri = (!process.env.VERCEL && process.env.MONGODB_LOCAL_URI)
+  ? process.env.MONGODB_LOCAL_URI
+  : process.env.MONGODB_URI;
+
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(mongoUri)
   .then(async () => {
     console.log('✅  MongoDB connected');
     await mongoose.connection.db
@@ -413,17 +441,21 @@ app.patch('/api/consignments/:id/file', async (req, res) => {
 
       if (existingUrl) {
         if (existingUrl.includes('cloudinary.com')) {
-          // Extract the public_id from the Cloudinary URL
-          // URL format: .../upload/v1234567890/consignments/filename.pdf
+          // Extract the public_id from the Cloudinary URL.
+          // raw resources keep the file extension in their public_id;
+          // image resources have the extension stripped.
           try {
+            const isRaw = existingUrl.includes('/raw/upload/');
             const afterUpload = existingUrl.split('/upload/')[1];
-            // Strip the optional version segment (v<digits>/)
             const withoutVersion = afterUpload.replace(/^v\d+\//, '');
-            const publicId = withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));
-            // PDFs go through /auto/upload and are stored as Cloudinary "image" assets,
-            // so destroy with the default resource type (same as the consignment-delete path).
-            await cloudinary.uploader.destroy(publicId, { invalidate: true });
-            console.log(`🗑️  Cloudinary asset destroyed: ${publicId}`);
+            const publicId = isRaw
+              ? withoutVersion                                                     // raw: keep extension
+              : withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));      // image: strip extension
+            const destroyOpts = isRaw
+              ? { resource_type: 'raw', invalidate: true }
+              : { invalidate: true };
+            await cloudinary.uploader.destroy(publicId, destroyOpts);
+            console.log(`🗑️  Cloudinary asset destroyed (${isRaw ? 'raw' : 'image'}): ${publicId}`);
           } catch (cldErr) {
             // Non-fatal: log but continue so the DB record is still cleared
             console.error('⚠️  Cloudinary destroy error (non-fatal):', cldErr.message);
@@ -585,13 +617,19 @@ app.delete('/api/consignments/:id', async (req, res) => {
 
       for (const fileUrl of allUrls) {
         try {
-          // URL format: .../upload/v<digits>/consignments/filename.pdf
+          // Detect raw vs image resource type from the URL segment
+          const isRaw = fileUrl.includes('/raw/upload/');
           const afterUpload = fileUrl.split('/upload/')[1];
           const withoutVersion = afterUpload.replace(/^v\d+\//, '');
-          const publicId = withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));
+          const publicId = isRaw
+            ? withoutVersion                                                       // raw: keep extension
+            : withoutVersion.substring(0, withoutVersion.lastIndexOf('.'));        // image: strip extension
+          const destroyOpts = isRaw
+            ? { resource_type: 'raw', invalidate: true }
+            : { invalidate: true };
 
-          await cloudinary.uploader.destroy(publicId, { invalidate: true });
-          console.log(`🗑️  Deleted Cloudinary asset: ${publicId}`);
+          await cloudinary.uploader.destroy(publicId, destroyOpts);
+          console.log(`🗑️  Deleted Cloudinary asset (${isRaw ? 'raw' : 'image'}): ${publicId}`);
         } catch (innerErr) {
           console.warn(`⚠️  Could not destroy Cloudinary asset for URL ${fileUrl}:`, innerErr.message);
         }
