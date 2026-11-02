@@ -24,13 +24,9 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import { COMPANY_COLOR } from '../lib/constants';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const COMPANY_COLOR = {
-  'مصانع الترياق': 'blue',
-  'شركة الزامل':   'sky',
-};
 
 const fmtNum = (n, currency = '') =>
   `${Number(n || 0).toLocaleString('ar-EG')}${currency ? ' ' + currency : ''}`;

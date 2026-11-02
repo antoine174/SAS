@@ -4,6 +4,11 @@ export default {
     './index.html',
     './src/**/*.{js,jsx,ts,tsx}',
   ],
+  safelist: [
+    {
+      pattern: /(bg|text|border)-(blue|sky|indigo|cyan|emerald|violet|amber|rose|slate)-(50|100|200|800)/,
+    },
+  ],
   theme: {
     extend: {
       fontFamily: {
