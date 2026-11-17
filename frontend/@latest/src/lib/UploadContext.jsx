@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { fetchApi, uploadDirectToCloudinary } from './api';
+import { compressPdfIfNeeded } from './pdfCompressor';
 
 const UploadContext = createContext(null);
 
@@ -30,16 +31,19 @@ export function UploadProvider({ children }) {
     setGlobalUploadingKeys((prev) => new Set(prev).add(uploadKey));
 
     const uploadPromise = (async () => {
-      // 1. Upload file directly to Cloudinary with full context metadata
-      const publicUrl = await uploadDirectToCloudinary(file, payload);
+      // 1. Compress if the PDF is >9.5 MB (CamScanner scans can be huge)
+      const fileToUpload = await compressPdfIfNeeded(file);
 
-      // 2. Persist new Cloudinary URL to MongoDB
+      // 2. Upload file directly to Cloudinary with full context metadata
+      const publicUrl = await uploadDirectToCloudinary(fileToUpload, payload);
+
+      // 3. Persist new Cloudinary URL to MongoDB
       const updatedDoc = await fetchApi(`/api/consignments/${consignmentId}/file`, {
         method: 'PATCH',
         body: JSON.stringify({ tab, key, url: publicUrl }),
       });
 
-      // 3. Notify the active modal or screen if currently open
+      // 4. Notify the active modal or screen if currently open
       if (typeof onSuccess === 'function') {
         try {
           onSuccess(updatedDoc);

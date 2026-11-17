@@ -40,7 +40,7 @@ export default function FileUploadsSummary({ doc }) {
           {Object.entries(groups).map(([tab, group]) => (
             <div key={tab}>
               <p className="px-3 py-1.5 text-[11px] font-bold text-slate-500 bg-slate-50">{group.label}</p>
-              {group.items.map((f) => (
+              {(Array.isArray(group?.items) ? group.items : []).map((f) => (
                 <div key={`${tab}-${f.key}`} className="px-3 py-1.5 text-xs">
                   <p className="font-semibold text-slate-800 truncate">{f.label}</p>
                   <p className={`flex items-center gap-1 mt-0.5 ${f.known ? 'text-slate-600' : 'text-slate-400 italic'}`}>

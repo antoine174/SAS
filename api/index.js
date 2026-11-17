@@ -306,7 +306,18 @@ app.get('/api/consignments', async (req, res) => {
     const {
       companyName, acid, invoiceSequenceNumber, consignmentNumber,
       itemName, count, supplierName, certificateNumber, arrivalPort, fileNumber,
+      search,
     } = req.query;
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      query.$or = [
+        { acid: { $regex: s, $options: 'i' } },
+        { companyName: { $regex: s, $options: 'i' } },
+        { fileNumber: { $regex: s, $options: 'i' } },
+        { itemName: { $regex: s, $options: 'i' } },
+      ];
+    }
 
     if (companyName) query.companyName = { $regex: companyName, $options: 'i' };
     if (acid) query.acid = { $regex: acid, $options: 'i' };
@@ -401,6 +412,31 @@ app.put('/api/consignments/:id', async (req, res) => {
       return res.status(400).json({
         message: Object.values(err.errors).map((e) => e.message).join(' | '),
       });
+    res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
+  }
+});
+
+// GET /api/consignments/search-lite — MUST stay ABOVE /:id so Express doesn't
+// treat the literal string "search-lite" as a MongoDB ObjectId parameter.
+app.get('/api/consignments/search-lite', requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    const filter = q
+      ? {
+          $or: [
+            { acid: { $regex: q, $options: 'i' } },
+            { companyName: { $regex: q, $options: 'i' } },
+            { fileNumber: { $regex: q, $options: 'i' } },
+            { itemName: { $regex: q, $options: 'i' } },
+          ],
+        }
+      : {};
+    const docs = await Consignment.find(filter)
+      .select('_id acid companyName fileNumber itemName')
+      .sort({ createdAt: -1 })
+      .limit(20);
+    res.json(docs);
+  } catch (err) {
     res.status(500).json({ message: 'خطأ في الخادم', error: err.message });
   }
 });
