@@ -14,11 +14,18 @@
 import { precacheAndRoute } from 'workbox-precaching';
 
 // ─── Share Target Interception ───────────────────────────────────────────────
+// The manifest declares action: '/quick-upload' (POST, multipart/form-data).
+// Android posts the shared file here; we store it in IndexedDB then redirect.
+// '/share-target' is kept as a fallback for previously-cached manifests.
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Only intercept POST to /share-target — everything else falls through
-  if (url.pathname !== '/share-target' || event.request.method !== 'POST') return;
+  // Intercept POST to /quick-upload (the share_target action in the manifest).
+  // The old path /share-target is also caught as a safety net for cached manifests.
+  const isSharePost =
+    event.request.method === 'POST' &&
+    (url.pathname === '/quick-upload' || url.pathname === '/share-target');
+  if (!isSharePost) return;
 
   event.respondWith(handleShareTarget(event.request));
 });
