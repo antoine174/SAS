@@ -105,19 +105,48 @@ const mongoUri = (!process.env.VERCEL && process.env.MONGODB_LOCAL_URI)
   ? process.env.MONGODB_LOCAL_URI
   : process.env.MONGODB_URI;
 
-mongoose
-  .connect(mongoUri)
-  .then(async () => {
-    console.log('✅  MongoDB connected');
-    await mongoose.connection.db
-      .collection('consignments')
-      .dropIndex('billId_1_companyName_1')
-      .catch(() => { });
-    await seedAdmin();
-  })
-  .catch((err) => {
-    console.error('❌  MongoDB error:', err);
-  });
+let cachedConnPromise = null;
+let isSeeded = false;
+
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) return mongoose.connection;
+  if (!cachedConnPromise) {
+    cachedConnPromise = mongoose
+      .connect(mongoUri, {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+      })
+      .then(async (conn) => {
+        console.log('✅  MongoDB connected');
+        if (!isSeeded) {
+          isSeeded = true;
+          await mongoose.connection.db
+            .collection('consignments')
+            .dropIndex('billId_1_companyName_1')
+            .catch(() => {});
+          await seedAdmin();
+        }
+        return conn;
+      })
+      .catch((err) => {
+        cachedConnPromise = null; // Reset cache so the next request retries cleanly
+        throw err;
+      });
+  }
+  return cachedConnPromise;
+}
+
+// Ensure DB is connected before handling any API route (except /api/health)
+app.use('/api', async (req, res, next) => {
+  if (req.path === '/health') return next();
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('❌  MongoDB connection error:', err.message);
+    res.status(500).json({ message: 'فشل الاتصال بقاعدة البيانات', error: err.message });
+  }
+});
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
