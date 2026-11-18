@@ -103,18 +103,22 @@ async function seedAdmin() {
 // ─── MongoDB Connection ───────────────────────────────────────────────────────
 const mongoUri = (!process.env.VERCEL && process.env.MONGODB_LOCAL_URI)
   ? process.env.MONGODB_LOCAL_URI
-  : process.env.MONGODB_URI;
+  : (process.env.MONGODB_URI || '').trim();
 
 let cachedConnPromise = null;
 let isSeeded = false;
 
 async function connectDB() {
-  if (mongoose.connection.readyState === 1) return mongoose.connection;
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
   if (!cachedConnPromise) {
     cachedConnPromise = mongoose
       .connect(mongoUri, {
-        serverSelectionTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 15000,
         socketTimeoutMS: 45000,
+        maxPoolSize: 10,
+        family: 4, // Force IPv4 to avoid AWS Lambda IPv6 SRV/TLS timeouts
       })
       .then(async (conn) => {
         console.log('✅  MongoDB connected');
@@ -129,22 +133,22 @@ async function connectDB() {
         return conn;
       })
       .catch((err) => {
-        cachedConnPromise = null; // Reset cache so the next request retries cleanly
+        cachedConnPromise = null;
         throw err;
       });
   }
   return cachedConnPromise;
 }
 
-// Ensure DB is connected before handling any API route (except /api/health)
+// Middleware: guarantee MongoDB is connected BEFORE any route runs
 app.use('/api', async (req, res, next) => {
   if (req.path === '/health') return next();
   try {
     await connectDB();
     next();
   } catch (err) {
-    console.error('❌  MongoDB connection error:', err.message);
-    res.status(500).json({ message: 'فشل الاتصال بقاعدة البيانات', error: err.message });
+    console.error('❌  MongoDB connection error:', err);
+    res.status(500).json({ message: 'خطأ في الاتصال بقاعدة البيانات', error: err.message });
   }
 });
 
