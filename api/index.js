@@ -125,6 +125,11 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Backend is alive' });
 });
 
+// Safety net: In case a cold share target POST reaches the backend before SW wakes up
+app.post(['/quick-upload', '/api/quick-upload', '/api/share-fallback'], (req, res) => {
+  res.redirect(303, '/quick-upload?shared=1');
+});
+
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 // Verifies the Bearer JWT and exposes a trusted identity on req.user:
 //   { _id, id, username, role, email }

@@ -1,12 +1,29 @@
 {
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "/api/index.js"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/frontend/@latest/dist/index.html"
-        }
-    ]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/frontend/@latest/dist/assets/$1"
+    },
+    {
+      "source": "/(sw\\.js|registerSW\\.js|manifest\\.webmanifest|favicon\\.svg|icons\\.svg|pwa-192x192\\.png|pwa-512x512\\.png|workbox-.*\\.js)",
+      "destination": "/frontend/@latest/dist/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/frontend/@latest/dist/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
 }

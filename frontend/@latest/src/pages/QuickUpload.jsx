@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   Upload, Search, FileText, Loader2, CheckCircle2,
@@ -176,6 +176,7 @@ function ConsignmentSearch({ onSelect }) {
 export default function QuickUpload() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [file, setFile]               = useState(null);
   const [fileFromInput, setFileFromInput] = useState(false);
@@ -189,15 +190,16 @@ export default function QuickUpload() {
   const [uploading, setUploading]     = useState(false);
   const fileInputRef                  = useRef(null);
 
-  // ── Load PDF from IndexedDB on mount ─────────────────────────────────────
+  // ── Load PDF from IndexedDB on mount or when ?shared=1 changes ───────────
   useEffect(() => {
+    setIdbLoading(true);
     getSharedFile()
       .then((result) => {
         if (result?.file) setFile(result.file);
       })
       .catch(() => {})
       .finally(() => setIdbLoading(false));
-  }, []);
+  }, [location.search]);
 
   // ── File picker fallback ──────────────────────────────────────────────────
   const handleFilePick = (e) => {
