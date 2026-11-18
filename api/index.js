@@ -126,8 +126,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Safety net: In case a cold share target POST reaches the backend before SW wakes up
-app.post(['/quick-upload', '/api/quick-upload', '/api/share-fallback'], (req, res) => {
-  res.redirect(303, '/quick-upload?shared=1');
+app.post(['/quick-upload', '/api/quick-upload', '/api/share-fallback', '/share-target'], (req, res) => {
+  res.redirect(303, '/?quickUpload=1');
 });
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────

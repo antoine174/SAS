@@ -10,7 +10,8 @@
  *   /users            – Admin user management
  */
 
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader2 } from 'lucide-react';
@@ -57,6 +58,18 @@ function LoginRoute() {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Auto-redirect /?quickUpload=1 or /?shared=1 to /quick-upload?shared=1
+  // Ensures Vercel's root '/' (which never 404s) seamlessly handoffs to QuickUpload
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search || location.search);
+    if (params.get('quickUpload') === '1' || params.get('shared') === '1') {
+      navigate('/quick-upload?shared=1', { replace: true });
+    }
+  }, [navigate, location.search]);
+
   return (
     <>
       <ToastContainer position="bottom-left" rtl pauseOnHover closeOnClick newestOnTop />

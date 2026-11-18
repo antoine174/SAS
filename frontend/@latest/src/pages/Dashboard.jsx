@@ -153,6 +153,16 @@ function ConsignmentCard({ doc, onDeleteClick }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const navigate = useNavigate();
+
+  // Safeguard: redirect if ?quickUpload=1 or ?shared=1 is present
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('quickUpload') === '1' || params.get('shared') === '1') {
+      navigate('/quick-upload?shared=1', { replace: true });
+    }
+  }, [navigate]);
+
   // docs is always kept as an array; never set to a raw API response object
   const [docs, setDocs]           = useState([]);
   const [loading, setLoading]     = useState(true);

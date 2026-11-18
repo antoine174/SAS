@@ -14,7 +14,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/frontend/@latest/dist/index.html"
+      "destination": "/frontend/@latest/dist/"
     }
   ],
   "headers": [

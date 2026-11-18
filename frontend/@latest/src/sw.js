@@ -5,8 +5,9 @@
  *
  * 1. Immediate activation via skipWaiting() & clients.claim()
  * 2. Intercepts the Share Target POST from the OS share sheet,
- *    stores the shared PDF into IndexedDB, and redirects to /quick-upload?shared=1.
+ *    stores the shared PDF into IndexedDB, and redirects to /?quickUpload=1.
  * 3. Precaches the app shell via Workbox.
+ * 4. Intercepts GET SPA navigations (/quick-upload, /consignment/:id) and serves index.html.
  */
 
 import { precacheAndRoute } from 'workbox-precaching';
@@ -20,13 +21,16 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-// ─── Share Target Interception ───────────────────────────────────────────────
-// Match any POST request whose url.pathname ends with /quick-upload or /share-target
+// ─── 1. Intercept POST Share Target from CamScanner ──────────────────────────
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
   if (
     event.request.method === 'POST' &&
-    (url.pathname === '/quick-upload' || url.pathname.endsWith('/quick-upload') || url.pathname.endsWith('/share-target'))
+    (url.pathname === '/quick-upload' ||
+      url.pathname.endsWith('/quick-upload') ||
+      url.pathname.endsWith('/share-target') ||
+      url.pathname === '/')
   ) {
     event.respondWith(
       (async () => {
@@ -44,14 +48,32 @@ self.addEventListener('fetch', (event) => {
         } catch (err) {
           console.error('SW Share Target error:', err);
         }
-        return Response.redirect('/quick-upload?shared=1', 303);
+        // Redirect to root with ?quickUpload=1 (Root '/' NEVER 404s on Vercel!)
+        return Response.redirect('/?quickUpload=1', 303);
       })()
     );
+    return;
   }
 });
 
 // ─── Workbox Precaching ──────────────────────────────────────────────────────
-precacheAndRoute(self.__WB_MANIFEST);
+precacheAndRoute(self.__WB_MANIFEST || []);
+
+// ─── 2. Intercept GET SPA navigations and serve index.html ───────────────────
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate' && !event.request.url.includes('/api/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.status === 404) {
+            return caches.match('/index.html').then((cached) => cached || fetch('/'));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html').then((cached) => cached || fetch('/')))
+    );
+  }
+});
 
 // ─── IndexedDB helper ────────────────────────────────────────────────────────
 const DB_NAME = 'sas-share-store';
