@@ -6,7 +6,8 @@ export default {
   ],
   safelist: [
     {
-      pattern: /(bg|text|border)-(blue|sky|indigo|cyan|emerald|violet|amber|rose|slate)-(50|100|200|800)/,
+      pattern: /(bg|text|border)-(blue|sky|indigo|cyan|emerald|teal|violet|amber|rose|slate)-(50|100|200|300|400|800)/,
+      variants: ['hover'],
     },
   ],
   theme: {
